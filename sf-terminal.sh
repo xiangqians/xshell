@@ -85,10 +85,16 @@ while true; do
 	
 	# 帮助命令
 	elif [[ $p == 'h' ]]; then
+		# ls
 		printf '%s\t%s\n' 'ls' 'server list'
 		printf '\t%s\n' 'eg: ls'
+		# add
 		printf '%s\t%s\n' 'add' 'add server'
 		printf '\t%s\n' 'eg: add {host} {port} {user} {passwd} {rem}'
+		# del
+		printf '%s\t%s\n' 'del' 'delete server'
+		printf '\t%s\n' 'eg: del {id}'
+		# q
 		printf '%s\t%s\n' 'q' 'quit'
 		continue
 	
@@ -99,21 +105,15 @@ while true; do
 	
 	# 新增server
 	elif [[ $p == 'add '* ]]; then
-	
-		if [[ $p == 'add' ]]; then
-			printf 'Invalid server\n'
-			continue
-		fi
-		
 		p=${p: 4}
 		if [[ $p == "" ]]; then
-			printf 'Invalid server\n'
+			printf 'invalid server\n'
 			continue
 		fi
 		
 		arr=($(convStrToArr "$p"))
 		if [ ${#arr[*]} -ne 5 ]; then 
-			printf 'Invalid server\n'
+			printf 'invalid server\n'
 			continue
 		fi
 		
@@ -121,8 +121,12 @@ while true; do
 		continue
 	
 	# 删除server
-	elif [[ $p == 'del' ]]; then
-		
+	elif [[ $p == 'del '* ]]; then
+		p=${p: 4}
+		id=$((p+0))
+		sed -i "${id}d" $svrconf
+		printf '\n'
+		list
 		continue
 	
 	# 更新server
