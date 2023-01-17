@@ -1,14 +1,11 @@
 #!/bin/bash
 
-# sed -i '2d' test.txt
-# sed -i '2i\ test123' test.txt
-# sed -n '2p' test.txt
+# 当前时间
+function now(){
+	echo `date "+%Y-%m-%d %H:%M:%S.%N"`
+}
 
-# add
-# del
-# upd
-# qry
-
+# 服务器列表
 function list(){
 	format="%-2s %-20s %-6s %-20s %-30s %s\n"
 	printf "${format}" "ID" "HOST" "PORT" "USER" "PASSWD" "REM"
@@ -35,16 +32,57 @@ function list(){
 			# id++
 			let id++
 		fi
-
-		#for e in ${arr[@]}
-		#do
-		#	echo "'"$e"'"
-		#done
+		
+: << !
+		for e in ${arr[@]}
+		do
+			echo "'"$e"'"
+		done
+!
 
 	done < ./test.txt
 }
 
 list
+
+
+while true; do
+	printf "\n"
+	read -p "$ " p
+	#echo $p	
+	if [[ $p == "" ]]; then
+		continue
+		
+	elif [[ $p == 'h' ]]; then
+		printf "%s\t%s\n" "ls" "server list"
+		printf "%s\t%s\n" "q" "quit"
+		continue
+		
+	elif [[ $p == 'ls' ]]; then
+		list
+		continue
+		
+	elif [[ $p == 'q' ]]; then
+		break
+		
+	else
+		printf "${p}: command not found\n"
+		continue
+	fi;
+done
+
+
+# sed -i '2d' test.txt
+# sed -i '2i\ test123' test.txt
+# sed -n '2p' test.txt
+
+# add
+# del
+# upd
+# qry
+
+
+
 
 
 
