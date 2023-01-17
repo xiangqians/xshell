@@ -1,5 +1,11 @@
 #!/bin/bash
 
+##########
+# auth: xiangqian
+# date: 18:39 ‎2023‎/0‎1‎/‎17‎
+##########
+
+
 # server配置
 svrconf="./test.txt"
 
@@ -153,10 +159,6 @@ done
 # sed -i '2d' test.txt
 # sed -i '2i\ test123' test.txt
 # sed -n '2p' test.txt
-
-
-
-
 
 
 
