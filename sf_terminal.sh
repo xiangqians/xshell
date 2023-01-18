@@ -376,16 +376,16 @@ function ScpFunc(){
 		return $CodeInvalidParam
 	fi
 	
-	# 类型：put,get
-	type=${arr[0]}
-	
 	# 校验id
-	id=${arr[1]}
+	id=${arr[0]}
 	CheckIdFunc "$id"
 	r=$?
 	if [ $r -ne 0 ]; then
 		return $r
 	fi
+	
+	# 类型：put,get
+	type=${arr[1]}
 	
 	fname1=${arr[2]}
 	if [[ $fname1 == "" ]]; then
@@ -580,8 +580,8 @@ function HelpFunc(){
 	
 	# scp
 	printf '  %s\t%s\n' 'scp' ''
-	printf '  \t%s\t%s\n' 'Usage: scp put {id} {local_file_name} {remote_file_name}'
-	printf '  \t%s\t%s\n' 'Usage: scp get {id} {remote_file_name} {local_file_name}'
+	printf '  \t%s\t%s\n' 'Usage: scp {id} put {local_file_name} {remote_file_name}'
+	printf '  \t%s\t%s\n' 'Usage: scp {id} get {remote_file_name} {local_file_name}'
 	
 	# pwd
 	printf '  %s\t%s\n' 'pwd' 'Print the name of the current working directory'
