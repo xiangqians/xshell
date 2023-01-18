@@ -385,21 +385,24 @@ function ScpFunc(){
 		return $r
 	fi
 	
-	# local file name
-	lfname=${arr[2]}
-	if [[ $lfname == "" ]]; then
+	fname1=${arr[2]}
+	if [[ $fname1 == "" ]]; then
 		return $CodeInvalidParam
 	fi
 	
-	# remote file name
-	rfname=${arr[3]}
-	if [[ $rfname == "" ]]; then
+	fname2=${arr[3]}
+	if [[ $fname2 == "" ]]; then
 		return $CodeInvalidParam
 	fi
 	
 	# put
 	# 从本地拷贝到远程
 	if [[ $type == 'put' ]]; then
+		# local file name
+		lfname=$fname1
+		# remote file name
+		rfname=$fname2
+		
 		# script file name
 		sfname=${fdir}/sf_terminal_scp_put.sh
 		cat>${sfname}<<EOF
@@ -435,7 +438,44 @@ EOF
 
 	# 从远程拷贝到本地
 	elif [[ $type == 'get' ]]; then
+		# local file name
+		lfname=$fname2
+		# remote file name
+		rfname=$fname1
+		
+		# script file name
 		sfname=${fdir}/sf_terminal_scp_get.sh
+		cat>${sfname}<<EOF
+#!/usr/bin/expect
+
+# 获取参数
+set host [lindex \$argv 0]
+set port [lindex \$argv 1]
+set user [lindex \$argv 2]
+set passwd [lindex \$argv 3]
+# local file name
+set lfname [lindex \$argv 4]
+# remote file name
+set rfname [lindex \$argv 5]
+
+# timeout
+#set timeout -1
+set timeout 60
+# -v 输出详细信息
+# -P 指定远程主机的 sshd 端口号
+# -p 保留文件的访问和修改时间
+# -r 递归复制目录及其内容
+# -C 在复制过程中压缩文件或目录
+# -6 使用 IPv6 协议
+spawn scp -v -r -p -P \${port} \${user}@\${host}:\${rfname} \${lfname} 
+expect {
+    "*yes/no*" { send "yes\r"; exp_continue }
+    #"*assword:*" { send "\${passwd}\r" }
+    "*assword:*" { send "\${passwd}\n" }
+}
+interact
+EOF
+
 	else
 		printf "%s: command not found\n" "${type}"
 		return $CodeNormal
