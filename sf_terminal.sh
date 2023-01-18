@@ -12,7 +12,7 @@
 
 # 当前目录
 cdir=$(cd $(dirname $0); pwd)
-#echo curDir $curDir
+#echo cdir $cdir
 
 # 获取当前软链接所指向的文件（sf_terminal.sh）路径，如果存在软链接的话
 # $ ln [options] source dist
@@ -326,12 +326,12 @@ expect {
 interact
 EOF
 	
-	# get
-	printf '  %s\t%s\n' 'get' ''
-	printf '  \t%s\n' 'Usage: get [-r] {remote_filename} {local_filename}'
 	# put
 	printf '  %s\t%s\n' 'put' ''
 	printf '  \t%s\n' 'Usage: put [-r] {local_filename} {remote_filename}'
+	# get
+	printf '  %s\t%s\n' 'get' ''
+	printf '  \t%s\n' 'Usage: get [-r] {remote_filename} {local_filename}'
 	printf '\n'
 
 	else
@@ -362,6 +362,19 @@ function SshFunc(){
 function SftpFunc(){
 	SshOrSftpFunc "$1" 'sftp'
 	return $?
+}
+
+# scp
+# scp（secure copy）是一个基于 SSH 协议在网络之间进行安全传输的命令。
+# 从本地拷贝到远程
+function ScpPutFunc(){
+	return 0
+}
+
+# scp
+# 从远程拷贝到本地
+function ScpGetFunc(){
+	return 0
 }
 
 # pwd
