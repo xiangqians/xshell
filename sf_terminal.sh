@@ -328,10 +328,10 @@ EOF
 	
 	# put
 	printf '  %s\t%s\n' 'put' ''
-	printf '  \t%s\n' 'Usage: put [-r] {local_filename} {remote_filename}'
+	printf '  \t%s\n' 'Usage: put [-r] {local_file_name} {remote_file_name}'
 	# get
 	printf '  %s\t%s\n' 'get' ''
-	printf '  \t%s\n' 'Usage: get [-r] {remote_filename} {local_filename}'
+	printf '  \t%s\n' 'Usage: get [-r] {remote_file_name} {local_file_name}'
 	printf '\n'
 
 	else
@@ -364,17 +364,94 @@ function SftpFunc(){
 	return $?
 }
 
-# scp
 # scp（secure copy）是一个基于 SSH 协议在网络之间进行安全传输的命令。
-# 从本地拷贝到远程
-function ScpPutFunc(){
-	return 0
-}
+function ScpFunc(){
+	arr=($(ConvStrToArrFunc "$1"))
+	
+	# 校验参数个数
+	len=${#arr[@]}
+	if [ $len -ne 4 ]; then
+		return $CodeInvalidParam
+	fi
+	
+	# 类型：put,get
+	type=${arr[0]}
+	
+	# 校验id
+	id=${arr[1]}
+	CheckIdFunc "$id"
+	r=$?
+	if [ $r -ne 0 ]; then
+		return $r
+	fi
+	
+	# local file name
+	lfname=${arr[2]}
+	if [[ $lfname == "" ]]; then
+		return $CodeInvalidParam
+	fi
+	
+	# remote file name
+	rfname=${arr[3]}
+	if [[ $rfname == "" ]]; then
+		return $CodeInvalidParam
+	fi
+	
+	# put
+	# 从本地拷贝到远程
+	if [[ $type == 'put' ]]; then
+		# script file name
+		sfname=${fdir}/sf_terminal_scp_put.sh
+		cat>${sfname}<<EOF
+#!/usr/bin/expect
 
-# scp
-# 从远程拷贝到本地
-function ScpGetFunc(){
-	return 0
+# 获取参数
+set host [lindex \$argv 0]
+set port [lindex \$argv 1]
+set user [lindex \$argv 2]
+set passwd [lindex \$argv 3]
+# local file name
+set lfname [lindex \$argv 4]
+# remote file name
+set rfname [lindex \$argv 5]
+
+# timeout
+#set timeout -1
+set timeout 60
+# -v 输出详细信息
+# -P 指定远程主机的 sshd 端口号
+# -p 保留文件的访问和修改时间
+# -r 递归复制目录及其内容
+# -C 在复制过程中压缩文件或目录
+# -6 使用 IPv6 协议
+spawn scp -v -r -p -P \${port} \${lfname} \${user}@\${host}:\${rfname}
+expect {
+    "*yes/no*" { send "yes\r"; exp_continue }
+    #"*assword:*" { send "\${passwd}\r" }
+    "*assword:*" { send "\${passwd}\n" }
+}
+interact
+EOF
+
+	# 从远程拷贝到本地
+	elif [[ $type == 'get' ]]; then
+		sfname=${fdir}/sf_terminal_scp_get.sh
+	else
+		printf "%s: command not found\n" "${type}"
+		return $CodeNormal
+	fi
+	
+	# server
+	svr=$(sed -n "${id}p" $svrconf)
+	#echo svr $svr
+	arr=($(ConvStrToArrFunc "$svr"))
+	host=${arr[0]}
+	port=${arr[1]}
+	user=${arr[2]}
+	passwd=${arr[3]}
+	expect ${sfname} "${host}" "${port}" "${user}" "${passwd}" "${lfname}" "${rfname}"
+	
+	return $CodeNormal
 }
 
 # pwd
@@ -459,6 +536,11 @@ function HelpFunc(){
 	printf '  %s\t%s\n' 'sftp' 'sftp'
 	printf '  \t%s\t%s\n' 'Usage: sftp {id}'
 	
+	# scp
+	printf '  %s\t%s\n' 'scp' ''
+	printf '  \t%s\t%s\n' 'Usage: scp put {id} {local_file_name} {remote_file_name}'
+	printf '  \t%s\t%s\n' 'Usage: scp get {id} {remote_file_name} {local_file_name}'
+	
 	# pwd
 	printf '  %s\t%s\n' 'pwd' 'Print the name of the current working directory'
 	printf '  \t%s\t%s\n' 'Usage: pwd [-P]'
@@ -525,6 +607,12 @@ while true; do
 	# sftp
 	elif [[ $p == 'sftp '* ]]; then
 		SftpFunc "${p: 5}"
+		PrintCodeMsg $?
+		continue
+	
+	# scp
+	elif [[ $p == 'scp '* ]]; then
+		ScpFunc "${p: 4}"
 		PrintCodeMsg $?
 		continue
 	
