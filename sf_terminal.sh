@@ -326,6 +326,14 @@ expect {
 interact
 EOF
 	
+	# get
+	printf '  %s\t%s\n' 'get' ''
+	printf '  \t%s\n' 'Usage: get [-r] {remote_filename} {local_filename}'
+	# put
+	printf '  %s\t%s\n' 'put' ''
+	printf '  \t%s\n' 'Usage: put [-r] {local_filename} {remote_filename}'
+	printf '\n'
+
 	else
 		printf 'unknown error\n'
 		exit 1
