@@ -17,13 +17,13 @@ cdir=$(cd $(dirname $0); pwd)
 # 获取当前软链接所指向的文件（sf_terminal.sh）路径，如果存在软链接的话
 # $ ln [options] source dist
 # $ ln -s source dist
-fpath=$(ls -al $0 | awk '{print $NF}')
-#echo fpath $fpath
+fname=$(ls -al $0 | awk '{print $NF}')
+#echo fname $fname
 # 获取 sf_terminal.sh 所在的真实目录
-fdir=${fpath%/*}
+fdir=${fname%/*}
 #echo fdir $fdir
 
-# test
+# tmp test
 fdir="/cygdrive/c/Users/xiangqian/Desktop/tmp/sf-terminal"
 
 # server配置
@@ -190,33 +190,33 @@ function UpdFunc(){
 		return $r
 	fi
 	
-	oldSvr=$(sed -n "${id}p" $svrconf)
-	oldArr=($(ConvStrToArrFunc "$oldSvr"))
+	oldsvr=$(sed -n "${id}p" $svrconf)
+	oldarr=($(ConvStrToArrFunc "$oldsvr"))
 	
 	idx=1
-	oldIdx=0
+	oldidx=0
 	while [ $idx -lt $len ]; do
 		p=${arr[$idx]}
 		#echo $p
 		# host
 		if [[ $p == '-h' ]]; then
-			oldIdx=0
+			oldidx=0
 			
 		# port
 		elif [[ $p == '-P' ]]; then
-			oldIdx=1
+			oldidx=1
 			
 		# user
 		elif [[ $p == '-u' ]]; then
-			oldIdx=2
+			oldidx=2
 			
 		# passwd
 		elif [[ $p == '-p' ]]; then
-			oldIdx=3
+			oldidx=3
 			
 		# rem
 		elif [[ $p == '-r' ]]; then
-			oldIdx=4
+			oldidx=4
 		
 		# command not found
 		else
@@ -227,17 +227,17 @@ function UpdFunc(){
 		# v
 		let idx++
 		v=${arr[$idx]}
-		oldArr[$oldIdx]=$v
+		oldarr[$oldidx]=$v
 		
 		let idx++
 	done
 	
-	#echo oldArr ${oldArr[*]}
-	oldSvr=${oldArr[@]}
-	#echo oldSvr $oldSvr
+	#echo oldarr ${oldarr[*]}
+	oldsvr=${oldarr[@]}
+	#echo oldsvr $oldsvr
 	# 先新增，再删除
-	oldId=$((id+1))
-	sed -i "${id}i\\$oldSvr" $svrconf && sed -i "${oldId}d" $svrconf
+	oldid=$((id+1))
+	sed -i "${id}i\\$oldsvr" $svrconf && sed -i "${oldid}d" $svrconf
 	
 	return $CodeNormal
 }
@@ -281,8 +281,9 @@ function SshOrSftpFunc(){
 	
 	# ssh
 	if [[ $type == 'ssh' ]]; then
-		fpath=${fdir}/sf_terminal_ssh.sh
-		cat>${fpath}<<EOF
+		# script file name
+		sfname=${fdir}/sf_terminal_ssh.sh
+		cat>${sfname}<<EOF
 #!/usr/bin/expect
 
 # 
@@ -305,8 +306,9 @@ EOF
 
 	# sftp
 	elif [[ $type == 'sftp' ]]; then
-		fpath=${fdir}/sf_terminal_sftp.sh
-		cat>${fpath}<<EOF
+		# script file name
+		sfname=${fdir}/sf_terminal_sftp.sh
+		cat>${sfname}<<EOF
 #!/usr/bin/expect
 
 # 
@@ -347,7 +349,7 @@ EOF
 	port=${arr[1]}
 	user=${arr[2]}
 	passwd=${arr[3]}
-	expect ${fpath} "${host}" "${port}" "${user}" "${passwd}"
+	expect ${sfname} "${host}" "${port}" "${user}" "${passwd}"
 	
 	return $CodeNormal
 }
