@@ -23,6 +23,9 @@ fpath=$(ls -al $0 | awk '{print $NF}')
 fdir=${fpath%/*}
 #echo fdir $fdir
 
+# test
+fdir="/cygdrive/c/Users/xiangqian/Desktop/tmp/sf-terminal"
+
 # server配置
 svrconf="${fdir}/sf_terminal_svr.conf"
 
@@ -80,7 +83,7 @@ function ConvStrToArrFunc(){
 # server列表
 function ListFunc(){
 	# format
-	format='%-3s %-18s %-8s %-8s %-8s %s\n'
+	format='%-3s %-18s %-8s %-20s %-8s %s\n'
 	printf "${format}" 'ID' 'HOST' 'PORT' 'USER' 'PASSWD' 'REM'
 	
 	# server id
