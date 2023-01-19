@@ -23,20 +23,21 @@ fname=$(ls -al $0 | awk '{print $NF}')
 fdir=${fname%/*}
 #echo fdir $fdir
 
-# tmp test
-fdir="/cygdrive/c/Users/xiangqian/Desktop/tmp/sf-terminal"
+# data dir
+#ddir=$fdir
+ddir="/cygdrive/c/Users/xiangqian/Desktop/tmp/sf-terminal"
 
-# server配置
-svrconf="${fdir}/sf_terminal_svr.conf"
+# server conf name
+svrconfname="${ddir}/sf_terminal_svr.conf"
 
 # 判断文件是否存在
-if [ ! -f $svrconf ]; then
+if [ ! -f $svrconfname ]; then
 	# 退出程序
-	#printf "%s: No such file\n" "${svrconf}"
+	#printf "%s: No such file\n" "${svrconfname}"
 	#exit 1
 	
 	# 文件不存在则创建
-	touch $svrconf
+	touch $svrconfname
 	# $? 获取上一个命令执行结果，如果非0（异常）则退出程序
 	if [ $? -ne 0 ]; then
 		exit 1
@@ -46,9 +47,27 @@ fi
 # code
 CodeNormal=0
 CodeInvalidId=1
-CodeIdNotExist=2
-CodeInvalidSvr=3
-CodeInvalidParam=4
+CodeInvalidParam=2
+CodeIdNotExist=3
+CodeParamNumNotMatch=4
+
+# 打印code消息
+function PrintCodeMsg(){
+	code=$1
+	#echo code $code
+	if [ $code -eq $CodeInvalidId ]; then
+		printf 'invalid id\n'
+
+	elif [ $code -eq $CodeInvalidParam ]; then
+		printf 'invalid parameter\n'
+	
+	elif [ $code -eq $CodeIdNotExist ]; then
+		printf 'id does not exist\n'
+	
+	elif [ $code -eq $CodeParamNumNotMatch ]; then
+		printf 'the number of parameters does not match\n'
+	fi
+}
 
 # 字符串转为数组
 function ConvStrToArrFunc(){
@@ -95,7 +114,7 @@ function ListFunc(){
 		#echo ${#arr[*]} ${arr[*]}
 		# 数组长度校验
 		if [ ${#arr[@]} -ne 5 ]; then
-			printf "unable to parse $svrconf\n"
+			printf "unable to parse $svrconfname\n"
 			exit 1
 		fi
 		
@@ -110,12 +129,12 @@ function ListFunc(){
 		
 		# id++
 		let id++
-	done < $svrconf
+	done < $svrconfname
 }
 
 # server数量
 function NFunc(){
-	n=$(sed -n '$=' $svrconf)
+	n=$(sed -n '$=' $svrconfname)
 	return $n
 }
 
@@ -141,19 +160,19 @@ function CheckIdFunc(){
 function AddFunc(){
 	svr=$1
 	if [[ $svr == "" ]]; then
-		return $CodeInvalidSvr
+		return $CodeInvalidParam
 	fi
 	
 	arr=($(ConvStrToArrFunc "$svr"))
 	if [ ${#arr[*]} -ne 5 ]; then
-		return $CodeInvalidSvr
+		return $CodeInvalidParam
 	fi
 	
 	# 添加到文件末尾
 	# sed -i 空文件无法添加
-	#sed -i '$a \'"$svr" $svrconf
+	#sed -i '$a \'"$svr" $svrconfname
 	# 使用 >> 添加
-	echo "$svr" >> $svrconf
+	echo "$svr" >> $svrconfname
 	return $CodeNormal
 }
 
@@ -166,7 +185,7 @@ function DelFunc(){
 		return $r
 	fi
 	
-	sed -i "${id}d" $svrconf
+	sed -i "${id}d" $svrconfname
 	return $CodeNormal
 }
 
@@ -190,7 +209,7 @@ function UpdFunc(){
 		return $r
 	fi
 	
-	oldsvr=$(sed -n "${id}p" $svrconf)
+	oldsvr=$(sed -n "${id}p" $svrconfname)
 	oldarr=($(ConvStrToArrFunc "$oldsvr"))
 	
 	idx=1
@@ -199,23 +218,23 @@ function UpdFunc(){
 		p=${arr[$idx]}
 		#echo $p
 		# host
-		if [[ $p == '-h' ]]; then
+		if [[ "$p" == '-h' ]]; then
 			oldidx=0
 			
 		# port
-		elif [[ $p == '-P' ]]; then
+		elif [[ "$p" == '-P' ]]; then
 			oldidx=1
 			
 		# user
-		elif [[ $p == '-u' ]]; then
+		elif [[ "$p" == '-u' ]]; then
 			oldidx=2
 			
 		# passwd
-		elif [[ $p == '-p' ]]; then
+		elif [[ "$p" == '-p' ]]; then
 			oldidx=3
 			
 		# rem
-		elif [[ $p == '-r' ]]; then
+		elif [[ "$p" == '-r' ]]; then
 			oldidx=4
 		
 		# command not found
@@ -237,7 +256,7 @@ function UpdFunc(){
 	#echo oldsvr $oldsvr
 	# 先新增，再删除
 	oldid=$((id+1))
-	sed -i "${id}i\\$oldsvr" $svrconf && sed -i "${oldid}d" $svrconf
+	sed -i "${id}i\\$oldsvr" $svrconfname && sed -i "${oldid}d" $svrconfname
 	
 	return $CodeNormal
 }
@@ -251,7 +270,7 @@ function QryFunc(){
 		return $r
 	fi
 	
-	svr=$(sed -n "${id}p" $svrconf)
+	svr=$(sed -n "${id}p" $svrconfname)
 	arr=($(ConvStrToArrFunc "$svr"))
 	host=${arr[0]}
 	port=${arr[1]}
@@ -267,258 +286,203 @@ function QryFunc(){
 	return $CodeNormal
 }
 
-# ssh or sftp
-function SshOrSftpFunc(){
+# execute script file
+function ExecSFFunc(){	
+	# 脚本文件类型
+	type=$1
+	
+	# server id
+	id=$2
+	
+	# local file name
+	lfname=$3
+	
+	# remote file name
+	rfname=$4
+
 	# 校验id
-	id=$1
 	CheckIdFunc "$id"
 	r=$?
 	if [ $r -ne 0 ]; then
 		return $r
 	fi
 	
-	type=$2
-	
-	# ssh
-	if [[ $type == 'ssh' ]]; then
-		# script file name
-		sfname=${fdir}/sf_terminal_ssh.sh
-		cat>${sfname}<<EOF
+	# script file name
+	sfname=${ddir}/sf_terminal_script.sh
+	cat>${sfname}<<EOF
 #!/usr/bin/expect
 
-# 
-set host [lindex \$argv 0]
-set port [lindex \$argv 1]
-set user [lindex \$argv 2]
-set passwd [lindex \$argv 3]
+# type
+set type [lindex \$argv 0]
+# host
+set host [lindex \$argv 1]
+# port
+set port [lindex \$argv 2]
+# user
+set user [lindex \$argv 3]
+# passwd
+set passwd [lindex \$argv 4]
+# local file name
+set lfname [lindex \$argv 5]
+# remote file name
+set rfname [lindex \$argv 6]
 
 # timeout
 #set timeout -1
 set timeout 60
-spawn /usr/bin/ssh \${user}@\${host} -p \${port}
-expect {
-    "*yes/no*" { send "yes\r"; exp_continue }
-    #"*assword:*" { send "\${passwd}\r" }
-    "*assword:*" { send "\${passwd}\n" }
-}
-interact
-EOF
 
-	# sftp
-	elif [[ $type == 'sftp' ]]; then
-		# script file name
-		sfname=${fdir}/sf_terminal_sftp.sh
-		cat>${sfname}<<EOF
-#!/usr/bin/expect
+if { "\$type" == "ssh" } {
+	spawn /usr/bin/ssh \${user}@\${host} -p \${port}
 
-# 
-set host [lindex \$argv 0]
-set port [lindex \$argv 1]
-set user [lindex \$argv 2]
-set passwd [lindex \$argv 3]
-
-# timeout
-#set timeout -1
-set timeout 60
-spawn /usr/bin/sftp -P \$port \$user@\$host
-expect {
-    "*yes/no*" { send "yes\r"; exp_continue }
-    "*assword:*" { send "\${passwd}\r" }
-}
-interact
-EOF
-	
+} elseif { "\$type" == "sftp" } {
 	# put
-	printf '  %s\t%s\n' 'put' ''
-	printf '  \t%s\n' 'Usage: put [-r] {local_file_name} {remote_file_name}'
+	puts "  put"
+	puts "  \tUsage: put \[-r\] {local_file_name} {remote_file_name}"
 	# get
-	printf '  %s\t%s\n' 'get' ''
-	printf '  \t%s\n' 'Usage: get [-r] {remote_file_name} {local_file_name}'
-	printf '\n'
+	puts "  get"
+	puts "  \tUsage: get \[-r\] {remote_file_name} {local_file_name}"
+	puts ""
+	# spawn
+	spawn /usr/bin/sftp -P \$port \$user@\$host
 
-	else
-		printf 'unknown error\n'
-		exit 1
-	fi
+} elseif { "\$type" == "scp_put" } {
+	# scp（secure copy）是一个基于 SSH 协议在网络之间进行安全传输的命令。
+	# -v 输出详细信息
+	# -P 指定远程主机的 sshd 端口号
+	# -p 保留文件的访问和修改时间
+	# -r 递归复制目录及其内容
+	# -C 在复制过程中压缩文件或目录
+	# -6 使用 IPv6 协议
 	
+	# 从本地拷贝到远程
+	spawn scp -v -r -p -C -P \${port} \${lfname} \${user}@\${host}:\${rfname}
+
+} elseif { "\$type" == "scp_get" } {
+	# 从远程拷贝到本地
+	spawn scp -v -r -p -C -P \${port} \${user}@\${host}:\${rfname} \${lfname}
+
+} elseif { "\$type" == "rsync_put" } {
+	# 注：使用 rsync 时，两端都需要安装 rsync
+
+	# rsync 默认使用 SSH 进行远程登录和数据传输
+	# \$ rsync [OPTION]... SRC [SRC]... [USER@]HOST:DEST
+	# \$ rsync [OPTION]... [USER@]HOST:SRC [DEST]
+	# -a 归档模式，表示以递归方式传输文件，并保持所有属性，它等同于-r、-l、-p、-t、-g、-o、-D 选项。-a 选项后面可以跟一个 --no-OPTION，表示关闭 -r、-l、-p、-t、-g、-o、-D 中的某一个，比如-a --no-l 等同于 -r、-p、-t、-g、-o、-D 选项。
+	# -r 以递归模式处理子目录，它主要是针对目录来说的，如果单独传一个文件不需要加 -r 选项，但是传输目录时必须加。
+	# -v 打印一些信息，比如文件列表、文件数量等。
+	# -l 保留软连接。
+	# -L 像对待常规文件一样处理软连接。如果是 SRC 中有软连接文件，则加上该选项后，将会把软连接指向的目标文件复制到 DEST。
+	# -p 保持文件权限。
+	# -t 保持文件时间信息。
+	# -g 保持文件属组信息。
+	# -o 保持文件属主信息。
+	# -D 保持设备文件信息。
+	# --port=PORT specify double-colon alternate port number.
+	# --delete 删除 DEST 中 SRC 没有的文件。
+	# --exclude=PATTERN 指定排除不需要传输的文件，等号后面跟文件名，可以是通配符模式（如 *.txt）。
+	# --progress 在同步的过程中可以看到同步的过程状态，比如统计要同步的文件数量、 同步的文件传输速度等。
+	# -u 把 DEST 中比 SRC 还新的文件排除掉，不会覆盖。
+	# -z 压缩传输。
+	# --rsh=COMMAND, -e specify the remote shell to use
+	
+	# 从本地拷贝到远程
+	#spawn rsync -avz --delete --progress \${lfname} \${user}@\${host}:\${rfname}
+	# https://www.linuxquestions.org/questions/linux-software-2/rsync-ssh-on-different-port-448112/
+	spawn rsync -avz --delete --progress -e "ssh -p \${port}" \${lfname} \${user}@\${host}:\${rfname}
+
+} elseif { "\$type" == "rsync_get" } {
+	# 从远程拷贝到本地
+	spawn rsync -avz --delete --progress -e "ssh -p \${port}" \${user}@\${host}:\${rfname} \${lfname} 
+
+} else {
+	puts "unknown type: ${type}\n"
+	exit 1
+}
+
+expect {
+	"*yes/no*" { send "yes\r"; exp_continue }
+	#"*assword:*" { send "\${passwd}\r" }
+	"*assword:*" { send "\${passwd}\n" }
+}
+
+interact
+EOF
+
 	# server
-	svr=$(sed -n "${id}p" $svrconf)
+	svr=$(sed -n "${id}p" $svrconfname)
 	#echo svr $svr
+	
+	# arr
 	arr=($(ConvStrToArrFunc "$svr"))
+	
+	# 服务器信息
 	host=${arr[0]}
 	port=${arr[1]}
 	user=${arr[2]}
 	passwd=${arr[3]}
-	expect ${sfname} "${host}" "${port}" "${user}" "${passwd}"
+	
+	# expect
+	expect ${sfname} "${type}" "${host}" "${port}" "${user}" "${passwd}" "${lfname}" "${rfname}"
 	
 	return $CodeNormal
 }
 
-# ssh
-function SshFunc(){
-	SshOrSftpFunc "$1" 'ssh'
-	return $?
-}
-
-# sftp
-function SftpFunc(){
-	SshOrSftpFunc "$1" 'sftp'
-	return $?
-}
-
-# scp（secure copy）是一个基于 SSH 协议在网络之间进行安全传输的命令。
-function ScpFunc(){
-	arr=($(ConvStrToArrFunc "$1"))
+# put | get
+function PutGetFunc(){
+	type=$1
+	
+	arr=($(ConvStrToArrFunc "$2"))
 	
 	# 校验参数个数
 	len=${#arr[@]}
 	if [ $len -ne 4 ]; then
-		return $CodeInvalidParam
+		return $CodeParamNumNotMatch
 	fi
 	
-	# 校验id
+	# id
 	id=${arr[0]}
-	CheckIdFunc "$id"
-	r=$?
-	if [ $r -ne 0 ]; then
-		return $r
-	fi
 	
-	# 类型：put,get
-	type=${arr[1]}
+	# put | get 类型
+	pgtype=${arr[1]}
 	
+	# fname
 	fname1=${arr[2]}
-	if [[ $fname1 == "" ]]; then
-		return $CodeInvalidParam
-	fi
-	
 	fname2=${arr[3]}
-	if [[ $fname2 == "" ]]; then
+	if [[ $fname1 == "" ]] || [[ $fname2 == "" ]]; then
 		return $CodeInvalidParam
 	fi
-	
-	# put
+		
+	# put {local_file_name} {remote_file_name}
 	# 从本地拷贝到远程
-	if [[ $type == 'put' ]]; then
+	if [[ $pgtype == 'put' ]]; then
 		# local file name
 		lfname=$fname1
 		# remote file name
 		rfname=$fname2
 		
-		# script file name
-		sfname=${fdir}/sf_terminal_scp_put.sh
-		cat>${sfname}<<EOF
-#!/usr/bin/expect
-
-# 获取参数
-set host [lindex \$argv 0]
-set port [lindex \$argv 1]
-set user [lindex \$argv 2]
-set passwd [lindex \$argv 3]
-# local file name
-set lfname [lindex \$argv 4]
-# remote file name
-set rfname [lindex \$argv 5]
-
-# timeout
-#set timeout -1
-set timeout 60
-# -v 输出详细信息
-# -P 指定远程主机的 sshd 端口号
-# -p 保留文件的访问和修改时间
-# -r 递归复制目录及其内容
-# -C 在复制过程中压缩文件或目录
-# -6 使用 IPv6 协议
-spawn scp -v -r -p -P \${port} \${lfname} \${user}@\${host}:\${rfname}
-expect {
-    "*yes/no*" { send "yes\r"; exp_continue }
-    #"*assword:*" { send "\${passwd}\r" }
-    "*assword:*" { send "\${passwd}\n" }
-}
-interact
-EOF
-
+	# get {remote_file_name} {local_file_name}
 	# 从远程拷贝到本地
-	elif [[ $type == 'get' ]]; then
+	elif [[ $pgtype == 'get' ]]; then
 		# local file name
 		lfname=$fname2
 		# remote file name
 		rfname=$fname1
 		
-		# script file name
-		sfname=${fdir}/sf_terminal_scp_get.sh
-		cat>${sfname}<<EOF
-#!/usr/bin/expect
-
-# 获取参数
-set host [lindex \$argv 0]
-set port [lindex \$argv 1]
-set user [lindex \$argv 2]
-set passwd [lindex \$argv 3]
-# local file name
-set lfname [lindex \$argv 4]
-# remote file name
-set rfname [lindex \$argv 5]
-
-# timeout
-#set timeout -1
-set timeout 60
-# -v 输出详细信息
-# -P 指定远程主机的 sshd 端口号
-# -p 保留文件的访问和修改时间
-# -r 递归复制目录及其内容
-# -C 在复制过程中压缩文件或目录
-# -6 使用 IPv6 协议
-spawn scp -v -r -p -P \${port} \${user}@\${host}:\${rfname} \${lfname} 
-expect {
-    "*yes/no*" { send "yes\r"; exp_continue }
-    #"*assword:*" { send "\${passwd}\r" }
-    "*assword:*" { send "\${passwd}\n" }
-}
-interact
-EOF
-
 	else
-		printf "%s: command not found\n" "${type}"
+		printf '%s: command not found\n' "${pgtype}"
 		return $CodeNormal
 	fi
 	
-	# server
-	svr=$(sed -n "${id}p" $svrconf)
-	#echo svr $svr
-	arr=($(ConvStrToArrFunc "$svr"))
-	host=${arr[0]}
-	port=${arr[1]}
-	user=${arr[2]}
-	passwd=${arr[3]}
-	expect ${sfname} "${host}" "${port}" "${user}" "${passwd}" "${lfname}" "${rfname}"
-	
-	return $CodeNormal
+	type=${type}_${pgtype}
+	ExecSFFunc "$type" "$id" "$lfname" "$rfname"
+	return $?
 }
 
 # pwd
 function PwdFunc(){
-	P=1
-	
-	arr=($(ConvStrToArrFunc "$1"))
-	idx=0
-	while [ $idx -lt ${#arr[@]} ]; do
-		p=${arr[$idx]}
-		if [[ $p == '-P' ]]; then
-			P=0
-		else
-			printf "%s: command not found\n" "${p}"
-			return $CodeNormal
-		fi
-		let idx++
-	done
-	
-	if [ $P -eq 0 ]; then 
-		printf '%s\n' "$fdir"
-	else
-		printf '%s\n' "$cdir"
-	fi
-	
+	printf 'cdir\t: %s\n' "${cdir}"
+	printf 'fdir\t: %s\n' "${fdir}"
+	printf 'ddir\t: %s\n' "${ddir}"
 	return $CodeNormal
 }
 
@@ -527,37 +491,26 @@ function NowFunc(){
 	echo `date "+%Y-%m-%d %H:%M:%S.%N"`
 }
 
-function PrintCodeMsg(){
-	code=$1
-	#echo code $code
-	if [ $code -eq $CodeInvalidId ]; then
-		printf 'invalid id\n'
-
-	elif [ $code -eq $CodeIdNotExist ]; then
-		printf 'id does not exist\n'
-		
-	elif [ $code -eq $CodeInvalidSvr ]; then
-		printf 'invalid server\n'
-	
-	elif [ $code -eq $CodeInvalidParam ]; then
-		printf 'invalid parameter\n'
-	fi
-}
-
-function HelpFunc(){
-	# ls
+# ls Help
+function LsHelpFunc(){
 	printf '  %s\t%s\n' 'ls' 'server list'
 	printf '  \t%s\n' 'Usage: ls'
-	
-	# add
+}
+
+# add Help
+function AddHelpFunc(){
 	printf '  %s\t%s\n' 'add' 'add server'
 	printf '  \t%s\n' 'Usage: add {host} {port} {user} {passwd} {rem}'
-	
-	# del
+}
+
+# del Help
+function DelHelpFunc(){
 	printf '  %s\t%s\n' 'del' 'delete server'
 	printf '  \t%s\n' 'Usage: del {id}'
-	
-	# upd
+}
+
+# upd Help
+function UpdHelpFunc(){
 	printf '  %s\t%s\n' 'upd' 'update server'
 	printf '  \t%s\t%s\n' 'Usage: upd {id} [-h {host}] [-P {port}] [-u {user}] [-p {passwd}] [-r {rem}]'
 	printf '  \t%s\t%s\n' '-h' 'host'
@@ -565,116 +518,179 @@ function HelpFunc(){
 	printf '  \t%s\t%s\n' '-u' 'user'
 	printf '  \t%s\t%s\n' '-p' 'passwd'
 	printf '  \t%s\t%s\n' '-r' 'rem'
-	
-	# qry
+}
+
+# qry Help
+function QryHelpFunc(){
 	printf '  %s\t%s\n' 'qry' 'query server'
 	printf '  \t%s\n' 'Usage: qry {id}'
-	
-	# ssh
+}
+
+# ssh Help
+function SshHelpFunc(){
 	printf '  %s\t%s\n' 'ssh' 'ssh'
 	printf '  \t%s\t%s\n' 'Usage: ssh {id}'
-	
-	# sftp
+}
+
+# sftp Help
+function SftpHelpFunc(){
 	printf '  %s\t%s\n' 'sftp' 'sftp'
 	printf '  \t%s\t%s\n' 'Usage: sftp {id}'
-	
-	# scp
+}
+
+# scp Help
+function ScpHelpFunc(){
 	printf '  %s\t%s\n' 'scp' ''
 	printf '  \t%s\t%s\n' 'Usage: scp {id} put {local_file_name} {remote_file_name}'
 	printf '  \t%s\t%s\n' 'Usage: scp {id} get {remote_file_name} {local_file_name}'
-	
-	# pwd
+}
+
+# rsync Help
+function RsyncHelpFunc(){
+	printf '  %s\t%s\n' 'rsync' ''
+	printf '  \t%s\t%s\n' 'Usage: rsync {id} put {local_file_name} {remote_file_name}'
+	printf '  \t%s\t%s\n' 'Usage: rsync {id} get {remote_file_name} {local_file_name}'
+}
+
+# pwd Help
+function PwdHelpFunc(){
 	printf '  %s\t%s\n' 'pwd' 'Print the name of the current working directory'
-	printf '  \t%s\t%s\n' 'Usage: pwd [-P]'
-	printf '  \t%s\t%s\n' '-P' 'print the physical directory, without any symbolic links'
-	
-	# now
+	printf '  \t%s\t%s\n' 'Usage: pwd'
+}
+
+# now Help
+function NowHelpFunc(){
 	printf '  %s\t%s\n' 'now' 'current time'
 	printf '  \t%s\t%s\n' 'Usage: now'
-	
-	# q
+}
+
+# q Help
+function QHelpFunc(){
 	printf '  %s\t%s\n' 'q' 'quit'
 	printf '  \t%s\n' 'Usage: q'
 }
 
+# Help
+function HelpFunc(){
+	LsHelpFunc
+	AddHelpFunc
+	DelHelpFunc
+	UpdHelpFunc
+	QryHelpFunc
+	SshHelpFunc
+	SftpHelpFunc
+	ScpHelpFunc
+	RsyncHelpFunc
+	PwdHelpFunc
+	NowHelpFunc
+	QHelpFunc
+}
+
 ListFunc
 
+# while
 while true; do
 	printf '\n'
 	read -p 'sf-terminal$ ' p
 	#echo $p	
-	if [[ $p == '' ]]; then
+	if [[ "$p" == '' ]]; then
 		continue
 	
 	# 帮助命令
-	elif [[ $p == 'h' ]]; then
+	elif [[ "$p" == 'h' ]]; then
 		HelpFunc
 		continue
 	
 	# ls
-	elif [[ $p == 'ls' ]]; then
+	elif [[ "$p" == 'ls' ]]; then
 		ListFunc
 		continue
 	
 	# add
-	elif [[ $p == 'add '* ]]; then
+	elif [[ "$p" == 'add' ]]; then
+		AddHelpFunc
+		continue
+	elif [[ "$p" == 'add '* ]]; then
 		AddFunc "${p: 4}"
 		PrintCodeMsg $?
 		continue
 	
 	# del
-	elif [[ $p == 'del '* ]]; then
+	elif [[ "$p" == 'del' ]]; then
+		DelHelpFunc
+		continue
+	elif [[ "$p" == 'del '* ]]; then
 		DelFunc "${p: 4}"
 		PrintCodeMsg $?
 		continue
 	
 	# upd
-	elif [[ $p == 'upd '* ]]; then
+	elif [[ "$p" == 'upd' ]]; then
+		UpdHelpFunc
+		continue
+	elif [[ "$p" == 'upd '* ]]; then
 		UpdFunc "${p: 4}"
 		PrintCodeMsg $?
 		continue
 	
 	# qry
-	elif [[ $p == 'qry '* ]]; then
+	elif [[ "$p" == 'qry' ]]; then
+		QryHelpFunc
+		continue
+	elif [[ "$p" == 'qry '* ]]; then
 		QryFunc "${p: 4}"
 		PrintCodeMsg $?
 		continue
 	
 	# ssh
-	elif [[ $p == 'ssh '* ]]; then
-		SshFunc "${p: 4}"
+	elif [[ "$p" == 'ssh' ]]; then
+		SshHelpFunc
+		continue
+	elif [[ "$p" == 'ssh '* ]]; then
+		ExecSFFunc 'ssh' "${p: 4}"
 		PrintCodeMsg $?
 		continue
 	
 	# sftp
-	elif [[ $p == 'sftp '* ]]; then
-		SftpFunc "${p: 5}"
+	elif [[ "$p" == 'sftp' ]]; then
+		SftpHelpFunc
+		continue
+	elif [[ "$p" == 'sftp '* ]]; then
+		ExecSFFunc 'sftp' "${p: 5}"
 		PrintCodeMsg $?
 		continue
 	
 	# scp
-	elif [[ $p == 'scp '* ]]; then
-		ScpFunc "${p: 4}"
+	elif [[ "$p" == 'scp' ]]; then
+		ScpHelpFunc
+		continue
+	elif [[ "$p" == 'scp '* ]]; then
+		PutGetFunc 'scp' "${p: 4}"
+		PrintCodeMsg $?
+		continue
+	
+	# rsync
+	elif [[ "$p" == 'rsync' ]]; then
+		RsyncHelpFunc
+		continue
+	elif [[ "$p" == 'rsync '* ]]; then
+		PutGetFunc 'rsync' "${p: 6}"
 		PrintCodeMsg $?
 		continue
 	
 	# pwd
-	elif [[ $p == 'pwd' ]]; then
-		PwdFunc ""
-		PrintCodeMsg $?
-		continue
-	elif [[ $p == 'pwd '* ]]; then
-		PwdFunc "${p: 4}"
+	elif [[ "$p" == 'pwd' ]]; then
+		PwdFunc
 		PrintCodeMsg $?
 		continue
 		
 	# 当前时间
-	elif [[ $p == 'now' ]]; then
+	elif [[ "$p" == 'now' ]]; then
 		NowFunc
 		continue
 	
 	# quit
-	elif [[ $p == 'q' ]]; then
+	elif [[ "$p" == 'q' ]]; then
 		break
 	
 	# command not found
