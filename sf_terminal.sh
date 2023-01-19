@@ -24,8 +24,8 @@ fdir=${fname%/*}
 #echo fdir $fdir
 
 # data dir
-#ddir=$fdir
-ddir="/cygdrive/c/Users/xiangqian/Desktop/tmp/sf-terminal"
+ddir=$fdir
+#ddir="/cygdrive/c/Users/xiangqian/Desktop/tmp/sf-terminal"
 
 # server conf name
 svrconfname="${ddir}/sf_terminal_svr.conf"
@@ -528,13 +528,13 @@ function QryHelpFunc(){
 
 # ssh Help
 function SshHelpFunc(){
-	printf '  %s\t%s\n' 'ssh' 'ssh'
+	printf '  %s\t%s\n' 'ssh' ''
 	printf '  \t%s\t%s\n' 'Usage: ssh {id}'
 }
 
 # sftp Help
 function SftpHelpFunc(){
-	printf '  %s\t%s\n' 'sftp' 'sftp'
+	printf '  %s\t%s\n' 'sftp' ''
 	printf '  \t%s\t%s\n' 'Usage: sftp {id}'
 }
 
