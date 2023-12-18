@@ -1,7 +1,6 @@
-# sf-terminal
+# xshell
 
 ssh, sftp, scp, rsync terminal
-
 
 # 安装
 
@@ -11,19 +10,22 @@ ssh, sftp, scp, rsync terminal
 $ apt install expect
 ```
 
-## sf-terminal
+## xshell
 
 ```shell
 $ cd /usr/local
 
-$ git clone https://github.com/xiangqians/sf-terminal.git
+$ git clone https://github.com/xiangqians/xshell.git
 
-$ ln -s /usr/local/sf-terminal/sf_terminal.sh /usr/local/bin/sf_terminal.sh
+# 创建软链接
+$ ln -sf /usr/local/src/xshell/xshell.sh /usr/local/bin/xshell.sh
+
+# 将DOS换行符转换为UNIX换行符
+#$ sed -i 's/\r$//' xshell.sh
 ```
-
 
 # help
 
 ```shell
-sf-terminal$ h
+xshell$ help
 ```
