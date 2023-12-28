@@ -32,32 +32,29 @@ XSHELL_FILE_DIR=${XSHELL_FILE%/*}
 SERVER_CONF_FILE="${XSHELL_FILE_DIR}/server.conf"
 echo -e "Server  Conf File: ${SERVER_CONF_FILE}"
 
-# 判断服务器配置文件是否存在
-if [ ! -f ${SERVER_CONF_FILE} ]; then
-	# 服务器配置文件不存在则创建
-	touch ${SERVER_CONF_FILE}
-	# $? 获取上一个命令执行结果，如果非0（异常）则退出程序
-	if [ $? -ne 0 ]; then
-		exit 1
-	fi
-fi
+# 定义一个空map，存储服务器配置信息
+declare -A server=()
+
+# 清空map
+function clear_map(){
+	for key in ${!server[@]}; do
+		unset server[$key]
+	done
+}
 
 # 读取服务配置文件
 function read_server_conf_func(){
+	# 目标id
+	local target_id=$1
+	
 	# 回调函数
-	local callback_func=$1
-	
-	# 行号
-	local nu=1
-	
+	local callback_func=$2
+
 	# 服务器id
 	local id=1
 	
-	# id行号
-	local id_nu=1
-	
-	# 定义一个空map
-	declare -A map=()
+	# 清空map
+	clear_map
 	
 	# 逐行读取文件内容
 	# read命令读取文件时会自动去掉行前后的空格
@@ -72,114 +69,72 @@ function read_server_conf_func(){
 		
 		# id
 		if [[ $line == '-' ]]; then
-			local host=${map['host']}
+			local host=${server['host']}
 			if [[ "$host" != '' ]]; then
-				map['id']=$id
-				map['id_nu']=$id_nu
-				
-				$callback_func map $2 $3
-				local r=$?
-				
-				# 清空map
-				for key in ${!map[@]}; do
-					unset map[$key]
-				done
-				
-				if [[ "$r" != '0' ]]; then
-					return $r
+				server['id']=$id
+				$callback_func
+				if [[ "$id" == "$target_id" ]]; then
+					return 1
 				fi
-				
+				clear_map
 				let id++
 			fi
-			id_nu=$nu
 		
 		# host
 		elif [[ $line =~ ^host: ]]; then
 			local host=${line:5}
 			host="${host#"${host%%[![:space:]]*}"}"
 			host="${host%"${host##*[![:space:]]}"}"
-			map['host']=$host
-			map['host_nu']=$nu
+			server['host']=$host
 		
 		# port
 		elif [[ $line =~ ^port: ]]; then
 			local port=${line:5}
 			port="${port#"${port%%[![:space:]]*}"}"
 			port="${port%"${port##*[![:space:]]}"}"
-			map['port']=$port
-			map['port_nu']=$nu
-		
+			server['port']=$port
+			
 		# user
 		elif [[ $line =~ ^user: ]]; then
 			local user=${line:5}
 			user="${user#"${user%%[![:space:]]*}"}"
 			user="${user%"${user##*[![:space:]]}"}"
-			map['user']=$user
-			map['user_nu']=$nu
+			server['user']=$user
 		
 		# passwd
 		elif [[ $line =~ ^passwd: ]]; then
 			local passwd=${line:7}
 			passwd="${passwd#"${passwd%%[![:space:]]*}"}"
 			passwd="${passwd%"${passwd##*[![:space:]]}"}"
-			map['passwd']=$passwd
-			map['passwd_nu']=$nu
+			server['passwd']=$passwd
 		
 		# key-file
 		elif [[ $line =~ ^key-file: ]]; then
 			local key_file=${line:9}
 			key_file="${key_file#"${key_file%%[![:space:]]*}"}"
 			key_file="${key_file%"${key_file##*[![:space:]]}"}"
-			map['key_file']=$key_file
-			map['key_file_nu']=$nu
+			server['key_file']=$key_file
 		
 		# rem
 		elif [[ $line =~ ^rem: ]]; then
 			local rem=${line:4}
 			rem="${rem#"${rem%%[![:space:]]*}"}"
 			rem="${rem%"${rem##*[![:space:]]}"}"
-			map['rem']=$rem
-			map['rem_nu']=$nu
+			server['rem']=$rem
 		fi
-		
-		let nu++
 	done < ${SERVER_CONF_FILE}
 	
-	local host=${map['host']}
+	local host=${server['host']}
 	if [[ "$host" != '' ]]; then
-		map['id']=$id
-		map['id_nu']=$id_nu
-		
-		$callback_func map $2 $3
-		local r=$?
-		
-		# 清空map
-		for key in ${!map[@]}; do
-			unset map[$key]
-		done
-		
-		return $r
+		server['id']=$id
+		$callback_func
+		if [[ "$id" == "$target_id" ]]; then
+			return 1
+		fi
 	fi
+	clear_map
 	
 	return 0
-}
-
-# 定义错误码Map
-declare -A ERR_CODE_MAP=()
-ERR_CODE_MAP['invalid_option']='invalid option: %s\n'
-ERR_CODE_MAP['option_requires_a_parameter_value']='option -%s requires a parameter value\n'
-ERR_CODE_MAP['invalid_host']='invalid host: %s\n'
-ERR_CODE_MAP['invalid_port']='invalid port: %s\n'
-ERR_CODE_MAP['invalid_user']='invalid user: %s\n'
-ERR_CODE_MAP['invalid_passwd']='invalid passwd: %s\n'
-ERR_CODE_MAP['invalid_key_file']='invalid key file: %s\n'
-ERR_CODE_MAP['invalid_rem']='invalid rem: %s\n'
-ERR_CODE_MAP['invalid_parameter']='invalid parameter: %s\n'
-ERR_CODE_MAP['id_not_exist']='id does not exist: %s\n'
-
-# 打印错误码消息
-function print_err_code_msg_func(){
-	printf "${ERR_CODE_MAP[$1]}" "$2"
 }
 
 # 服务器列表命令帮助
@@ -192,28 +147,18 @@ function ls_help_func(){
 FORMAT='%-5s %-20s %-10s %-20s %-16s %s\n'
 
 # 服务器列表回调函数
-function ls_callback_func(){
-	map=$1
+function ls_callback_func(){	
+	#echo server ${server[@]}
 	
-	#echo map ${map[@]}
-	
-	local id=${map['id']}
-	local id_nu=${map['id_nu']}
-	local host=${map['host']}
-	local host_nu=${map['host_nu']}
-	local port=${map['port']}
-	local port_nu=${map['port_nu']}
-	local user=${map['user']}
-	local user_nu=${map['user_nu']}
-	local passwd=${map['passwd']}
-	local passwd_nu=${map['passwd_nu']}
-	local key_file=${map['key_file']}
-	local key_file_nu=${map['key_file_nu']}
-	local rem=${map['rem']}
-	local rem_nu=${map['rem_nu']}
+	local id=${server['id']}
+	local host=${server['host']}
+	local port=${server['port']}
+	local user=${server['user']}
+	local passwd=${server['passwd']}
+	local key_file=${server['key_file']}
+	local rem=${server['rem']}
 	
 	printf "${FORMAT}" "${id}" "${host}" "${port}" "${user}" "******" "${rem}"
-	#printf "${FORMAT}" "${id}(${id_nu})" "${host}(${host_nu})" "${port}(${port_nu})" "${user}(${user_nu})" "******(${passwd_nu}/${key_file_nu})" "${rem}(${rem_nu})"
 	
 	return 0
 }
@@ -221,400 +166,13 @@ function ls_callback_func(){
 # 服务器列表
 function ls_func(){
 	printf "${FORMAT}" 'ID' 'HOST' 'PORT' 'USER' 'PASSWD/KEY-FILE' 'REM'
-	read_server_conf_func ls_callback_func
-}
-
-# add命令帮助
-function add_help_func(){
-	printf '  %s\t%s\n' 'add' 'add server'
-	printf '  \t%s\t%s\n' 'Usage: add -h {host} -P {port} -u {user} [-p {passwd}] [-k {key file}] -r {rem}'
-}
-
-# 新增服务器
-function add_func(){
-	#echo $# $@
-	
-	if [[ $# -eq 0 ]]; then
-		add_help_func
-		return
-	fi
-	
-	local host=
-	local port=
-	local user=
-	local passwd=
-	local key_file=
-	local rem=
-	
-	# 设置getopts命令区分选项的大小写（默认是不区分大小写的）
-	export POSIXLY_CORRECT=1
-	
-	# 第一次使用 getopts 运行脚本有效，但第二次运行它时不起作用问题：
-	# source 在当前 shell 的执行上下文中运行指定文件中的 bash 命令。
-	# 该执行上下文包括变量 OPTIND，getopts 使用它来记住“当前”参数索引。
-	# 因此，当您重复 source 脚本时，getopts 的每次调用都从上一次调用处理的最后一个参数之后的参数索引开始。
-	# 在脚本开头将 OPTIND 重置为 1，或者使用 bash getopt.sh 调用脚本。(通常 getopts 作为通过 she-bang 执行的脚本的一部分被调用，因此它有自己的执行上下文，您不必担心它的变量。)
-	OPTIND=1
-	
-	# 在Shell脚本中，getopts是一个内置的命令，用于解析命令行参数
-	while getopts ":h:P:u:p:k:r:" opt; do
-		case $opt in
-			# 选项 -h
-			h)
-				#echo "选项 -h，参数为 $OPTARG"
-				host=$OPTARG
-				;;
-			
-			# 选项 -P
-			P)
-				#echo "选项 -P，参数为 $OPTARG"
-				port=$OPTARG
-				;;
-			
-			# 选项 -u
-			u)
-				#echo "选项 -u，参数为 $OPTARG"
-				user=$OPTARG
-				;;
-			
-			# 选项 -p
-			p)
-				#echo "选项 -p，参数为 $OPTARG"
-				passwd=$OPTARG
-				;;
-			
-			# 选项 -k
-			k)
-				#echo "选项 -k，参数为 $OPTARG"
-				key_file=$OPTARG
-				;;
-			
-			# 选项 -r
-			r)
-				#echo "选项 -r，参数为 $OPTARG"
-				rem=$OPTARG
-				;;
-			
-			# 选项 -$OPTARG 需要一个参数值
-			:)				
-				print_err_code_msg_func option_requires_a_parameter_value "$OPTARG"
-				return
-				;;
-				
-			# ?
-			\?)
-				#echo "无效选项: -$OPTARG"
-				print_err_code_msg_func invalid_option "-$OPTARG"
-				return
-				;;
-		esac
-	done
-	
-	if [[ $host == '' ]]; then
-		print_err_code_msg_func invalid_host "$host"
-		return
-	fi
-	
-	if [[ $port == '' ]]; then
-		print_err_code_msg_func invalid_port "$port"
-		return
-	fi
-	
-	if [[ $user == '' ]]; then
-		print_err_code_msg_func invalid_user "$user"
-		return
-	fi
-	
-	if [[ $passwd == '' ]]; then
-		if [[ $key_file == '' ]]; then
-			print_err_code_msg_func invalid_passwd "$passwd"
-			return
-		fi
-	fi
-	
-	
-	if [[ $rem == '' ]]; then
-		print_err_code_msg_func invalid_rem "$rem"
-		return
-	fi
-	
-	# 在文件的结尾追加一行
-	# -i：在原始文件上进行直接修改
-	# $ ：匹配文件的最后一行位置，表示文件末尾
-	# a\：append，表示追加
-	#
-	# sed -i 空文件无法追加
-	# 为什么呢？
-	# 因为sed是基于行来处理的文件流编辑器，如果文件为空的话，它是处理不了的！
-	# Sed is a stream editor.A stream editor is used to perform basic text transformations on an input stream (a file or input from a pipeline).
-	# While in some ways similar to an editor which permits scripted edits (such as ed), 
-	# sed works by making only one pass  over the  input(s), and  is  consequently more efficient.
-	# But it is sed’s ability to filter text in a pipeline which particularly distin-guishes it from other types of editors.
-	# Sed是一个流编辑器。流编辑器用于对输入流（文件或来自管道的输入）执行基本的文本转换。尽管在某种程度上类似于允许脚本编辑（例如ed）的编辑器，但sed通过仅对输入进行一次传递来进行工作，因此效率更高。
-	# 但这是sed过滤管道中文本的能力，尤其可以区别于其他类型的编辑器。
-	# 那么这种情形要如何处理呢？
-	# 可以加个判断，如果文件存在但为空的话，使用echo命令来添加，如果非空的话，则使用sed命令。
-	if test -s ${SERVER_CONF_FILE}; then
-		sed -i '$a\''-' ${SERVER_CONF_FILE}
-	else
-		echo -e '-' >> ${SERVER_CONF_FILE}
-	fi
-	sed -i '$a\''\t''host: '"$host" ${SERVER_CONF_FILE}
-	sed -i '$a\''\t''port: '"$port" ${SERVER_CONF_FILE}
-	sed -i '$a\''\t''user: '"$user" ${SERVER_CONF_FILE}
-	sed -i '$a\''\t''passwd: '"$passwd" ${SERVER_CONF_FILE}
-	sed -i '$a\''\t''key-file: '"$key_file" ${SERVER_CONF_FILE}
-	sed -i '$a\''\t''rem: '"$rem" ${SERVER_CONF_FILE}
-	return
-}
-
-# 删除服务器信息命令帮助
-function del_help_func(){
-	printf '  %s\t%s\n' 'del' 'delete server'
-	printf '  \t%s\n' 'Usage: del {id}'
-}
-
-# 删除服务器信息回调
-function del_callback_func(){
-	map=$1
-	local id=$2
-	if [[ "$id" == "${map['id']}" ]]; then
-		local rem_nu=${map['rem_nu']}
-		if [[ "${rem_nu}" != '' ]]; then
-			sed -i "${rem_nu}d" ${SERVER_CONF_FILE}
-		fi
-		
-		local key_file_nu=${map['key_file_nu']}
-		if [[ "${key_file_nu}" != '' ]]; then
-			sed -i "${key_file_nu}d" ${SERVER_CONF_FILE}
-		fi
-		
-		local passwd_nu=${map['passwd_nu']}
-		if [[ "${passwd_nu}" != '' ]]; then
-			sed -i "${passwd_nu}d" ${SERVER_CONF_FILE}
-		fi
-		
-		local user_nu=${map['user_nu']}
-		if [[ "${user_nu}" != '' ]]; then
-			sed -i "${user_nu}d" ${SERVER_CONF_FILE}
-		fi
-		
-		local port_nu=${map['port_nu']}
-		if [[ "${port_nu}" != '' ]]; then
-			sed -i "${port_nu}d" ${SERVER_CONF_FILE}
-		fi
-		
-		local host_nu=${map['host_nu']}
-		if [[ "${host_nu}" != '' ]]; then
-			sed -i "${host_nu}d" ${SERVER_CONF_FILE}
-		fi
-		
-		local id_nu=${map['id_nu']}
-		if [[ "${id_nu}" != '' ]]; then
-			sed -i "${id_nu}d" ${SERVER_CONF_FILE}
-		fi
-
-		return 1
-	fi
-	return 0
-}
-
-# 删除服务器信息
-function del_func(){
-	if [[ $# -eq 0 ]]; then
-		del_help_func
-		return
-	fi
-	
-	if [[ $# -ne 1 ]]; then
-		local str="$@"
-		print_err_code_msg_func invalid_parameter "$str"
-		return
-	fi
-	
-	local id=$1
-	read_server_conf_func del_callback_func "$id"
-	local r=$?
-	if [[ $r -eq 0 ]]; then
-		print_err_code_msg_func id_not_exist "$id"
-	fi
-}
-
-# 更新服务器信息命令帮助
-function upd_help_func(){
-	printf '  %s\t%s\n' 'upd' 'update server'
-	printf '  \t%s\t%s\n' 'Usage: upd {id} [-h {host}] [-P {port}] [-u {user}] [-p {passwd}] [-k {key file}] [-r {rem}]'
-}
-
-# 更新服务器信息回调
-function upd_callback_func(){
-	map=$1
-	local id=$2
-	if [[ "$id" == "${map['id']}" ]]; then
-		upd_map=$3
-		echo upd_map ${upd_map[@]}
-		
-		local rem=${upd_map['rem']}
-		local rem_nu=${map['rem_nu']}
-		if [[ "${rem}" != '' && "${rem_nu}" != '' ]]; then
-			# ${rem_nu}a\ 表示在第 ${rem_nu} 行后添加文本
-			sed -i ${rem_nu}'a\''\t''rem: '"$rem" ${SERVER_CONF_FILE}
-			# 删除第 ${rem_nu} 行
-			sed -i ${rem_nu}'d' ${SERVER_CONF_FILE}
-		fi
-		
-		
-		local key_file=${upd_map['key_file']}
-		local key_file_nu=${map['key_file_nu']}
-		if [[ "${key_file}" != '' && "${key_file_nu}" != '' ]]; then
-			sed -i ${key_file_nu}'a\''\t''key-file: '"$key_file" ${SERVER_CONF_FILE}
-			sed -i ${key_file_nu}'d' ${SERVER_CONF_FILE}
-		fi
-		
-		local passwd=${upd_map['passwd']}
-		local passwd_nu=${map['passwd_nu']}
-		if [[ "${passwd}" != '' && "${passwd_nu}" != '' ]]; then
-			sed -i ${passwd_nu}'a\''\t''passwd: '"$passwd" ${SERVER_CONF_FILE}
-			sed -i ${passwd_nu}'d' ${SERVER_CONF_FILE}
-		fi
-		
-		local user=${upd_map['user']}
-		local user_nu=${map['user_nu']}
-		if [[ "${user}" != '' && "${user_nu}" != '' ]]; then
-			sed -i ${user_nu}'a\''\t''user: '"$user" ${SERVER_CONF_FILE}
-			sed -i ${user_nu}'d' ${SERVER_CONF_FILE}
-		fi
-		
-		local port=${upd_map['port']}
-		local port_nu=${map['port_nu']}
-		if [[ "${port}" != '' && "${port_nu}" != '' ]]; then
-			sed -i ${port_nu}'a\''\t''user: '"$port" ${SERVER_CONF_FILE}
-			sed -i ${port_nu}'d' ${SERVER_CONF_FILE}
-		fi
-		
-		local host=${upd_map['host']}
-		local host_nu=${map['host_nu']}
-		if [[ "${host}" != '' && "${host_nu}" != '' ]]; then
-			sed -i ${host_nu}'a\''\t''host: '"$host" ${SERVER_CONF_FILE}
-			sed -i ${host_nu}'d' ${SERVER_CONF_FILE}
-		fi
-		
-		local id=${upd_map['id']}
-		local id_nu=${map['id_nu']}
-		if [[ "${id}" != '' && "${id_nu}" != '' ]]; then
-			sed -i ${id_nu}'a\''\t''id: '"$id" ${SERVER_CONF_FILE}
-			sed -i ${id_nu}'d' ${SERVER_CONF_FILE}
-		fi
-
-		return 1
-	fi
-	return 0
-}
-
-# 更新服务器信息
-function upd_func(){
-	if [[ $# -eq 0 || $# -eq 1 ]]; then
-		upd_help_func
-		return
-	fi
-	
-	declare -A upd_map=()
-	
-	export POSIXLY_CORRECT=1
-	# 从第二个参数开始解析（第一个参数是server id）
-	OPTIND=2
-	while getopts ":h:P:u:p:k:r:" opt; do
-		case $opt in
-			# 选项 -h
-			h)
-				upd_map['host']=$OPTARG
-				;;
-			
-			# 选项 -P
-			P)
-				upd_map['port']=$OPTARG
-				;;
-			
-			# 选项 -u
-			u)
-				upd_map['user']=$OPTARG
-				;;
-			
-			# 选项 -p
-			p)
-				upd_map['passwd']=$OPTARG
-				;;
-			
-			# 选项 -k
-			k)
-				upd_map['key_file']=$OPTARG
-				;;
-			
-			# 选项 -r
-			r)
-				upd_map['rem']=$OPTARG
-				;;
-			
-			# 选项 -$OPTARG 需要一个参数值
-			:)				
-				print_err_code_msg_func option_requires_a_parameter_value "$OPTARG"
-				return
-				;;
-			
-			# ?
-			\?)
-				print_err_code_msg_func invalid_option "-$OPTARG"
-				return
-				;;
-		esac
-	done
-	
-	local id=$1
-	upd_map['id']=$id
-	read_server_conf_func upd_callback_func "$id" upd_map
-	local r=$?
-	
-	for key in ${!upd_map[@]}; do
-		# 删除关联map中的key
-		unset upd_map[$key]
-	done
-	
-	if [[ $r -eq 0 ]]; then
-		print_err_code_msg_func id_not_exist "$id"
-	fi
-	return 
+	read_server_conf_func 0 ls_callback_func
 }
 
 # 获取服务器信息命令帮助
 function get_help_func(){
 	printf '  %s\t%s\n' 'get' 'get server'
 	printf '  \t%s\n' 'Usage: get {id}'
-}
-
-# 获取服务器信息回调
-function get_callback_func(){
-	map=$1
-	local target_id=$2
-	local id=${map['id']}
-	if [[ "$id" == "$target_id" ]]; then
-		local host=${map['host']}
-		local port=${map['port']}
-		local user=${map['user']}
-		local passwd=${map['passwd']}
-		local key_file=${map['key_file']}
-		local rem=${map['rem']}
-		
-		printf 'host\t: %s\n' "${host}"
-		printf 'port\t: %s\n' "${port}"
-		printf 'user\t: %s\n' "${user}"
-		printf 'passwd\t: %s\n' "${passwd}"
-		printf 'key file: %s\n' "${key_file}"
-		printf 'rem\t: %s\n' "${rem}"
-		
-		return 1
-	fi
-	
-	return 0
 }
 
 # 获取服务器信息
@@ -625,50 +183,37 @@ function get_func(){
 	fi
 	
 	if [[ $# -ne 1 ]]; then
-		local str="$@"
-		print_err_code_msg_func invalid_parameter "$str"
+		printf 'invalid parameter\n'
 		return
 	fi
 	
 	local id=$1
-	read_server_conf_func get_callback_func "$id"
-	local r=$?
-	if [[ $r -eq 0 ]]; then
-		print_err_code_msg_func id_not_exist "$id"
+	read_server_conf_func "$id"
+	local result=$?
+	if [[ $result -eq 0 ]]; then
+		printf 'invalid id\n'
+		return
 	fi
+	
+	local host=${server['host']}
+	local port=${server['port']}
+	local user=${server['user']}
+	local passwd=${server['passwd']}
+	local key_file=${server['key_file']}
+	local rem=${server['rem']}
+	
+	printf 'Host\t: %s\n' "${host}"
+	printf 'Port\t: %s\n' "${port}"
+	printf 'User\t: %s\n' "${user}"
+	printf 'Passwd\t: %s\n' "${passwd}"
+	printf 'Key File: %s\n' "${key_file}"
+	printf 'Rem\t: %s\n' "${rem}"
 }
 
 # ssh命令帮助
 function ssh_help_func(){
-	printf '  %s\t%s\n' 'ssh' ''
-	printf '  \t%s\t%s\n' 'Usage: ssh {id}'
-}
-
-# ssh命令回调
-function ssh_callback_func(){
-	map=$1
-	local id=$2
-	if [[ "$id" == "${map['id']}" ]]; then
-		local host=${map['host']}
-		local port=${map['port']}
-		local user=${map['user']}
-		local passwd=${map['passwd']}
-		local key_file=${map['key_file']}
-		local rem=${map['rem']}
-		
-		# 使用expect自动登录远程服务器
-		expect -c "
-		set timeout 60
-		spawn ssh ${user}@${host} -p ${port}
-		expect {
-			\"*yes/no*\" { send \"yes\r\"; exp_continue }
-			\"*assword:*\" { send \"${passwd}\r\" }
-		}
-		interact
-		"
-		return 1
-	fi
-	return 0
+	printf '  %s\n' 'ssh'
+	printf '  \t%s\n' 'Usage: ssh {id}'
 }
 
 # ssh命令
@@ -679,52 +224,51 @@ function ssh_func(){
 	fi
 	
 	if [[ $# -ne 1 ]]; then
-		local str="$@"
-		print_err_code_msg_func invalid_parameter "$str"
+		printf 'invalid parameter\n'
 		return
 	fi
 	
 	local id=$1
-	read_server_conf_func ssh_callback_func "$id"
-	local r=$?
-	if [[ $r -eq 0 ]]; then
-		print_err_code_msg_func id_not_exist "$id"
+	read_server_conf_func "$id"
+	local result=$?
+	if [[ $result -eq 0 ]]; then
+		printf 'invalid id\n'
+		return
 	fi
+	
+	local host=${server['host']}
+	local port=${server['port']}
+	local user=${server['user']}
+	local passwd=${server['passwd']}
+	local key_file=${server['key_file']}
+
+	# 使用expect自动登录远程服务器
+	expect -c "
+	# 设置超时时间，60s
+	#set timeout -1
+	set timeout 60
+	
+	# spawn：启动一个新的进程，并将其与当前进程进行交互
+	spawn ssh ${user}@${host} -p ${port}
+	
+	# expect：等待特定的字符串或正则表达式出现，并执行相应的操作
+	expect {
+		# send：向进程发送字符串，并将该参数发送到进程，这个过程类似模拟人类交互
+		# exp_continue：允许expect继续向下执行指令，在expect中多次匹配就需要用到
+		\"*yes/no*\" { send \"yes\r\"; exp_continue }
+		\"*assword:*\" { send \"${passwd}\r\" }
+	}
+	
+	# interact：允许用户与进程进行交互，interact命令可以在适当的时候进行任务的干预，
+	# 比如下载完ftp文件时，仍然可以停留在ftp命令行状态，以便手动的执行后续命令
+	interact
+	"
 }
 
 # sftp命令帮助
 function sftp_help_func(){
-	printf '  %s\t%s\n' 'sftp' ''
-	printf '  \t%s\t%s\n' 'Usage: sftp {id}'
-}
-
-# sftp命令回调
-function sftp_callback_func(){
-	map=$1
-	local id=$2
-	if [[ "$id" == "${map['id']}" ]]; then
-		local host=${map['host']}
-		local port=${map['port']}
-		local user=${map['user']}
-		local passwd=${map['passwd']}
-		local key_file=${map['key_file']}
-		expect -c "
-		set timeout 60
-		puts \"  put\"
-		puts \"  \tUsage: put \[-r\] {local file name} {remote file name}\"
-		puts \"  get\"
-		puts \"  \tUsage: get \[-r\] {remote file name} {local file name}\"
-		puts \"\"
-		spawn sftp -P $port $user@$host
-		expect {
-			\"*yes/no*\" { send \"yes\r\"; exp_continue }
-			\"*assword:*\" { send \"${passwd}\r\" }
-		}
-		interact
-		"
-		return 1
-	fi
-	return 0
+	printf '  %s\n' 'sftp'
+	printf '  \t%s\n' 'Usage: sftp {id}'
 }
 
 # sftp命令
@@ -735,30 +279,41 @@ function sftp_func(){
 	fi
 	
 	if [[ $# -ne 1 ]]; then
-		local str="$@"
-		print_err_code_msg_func invalid_parameter "$str"
+		printf 'invalid parameter\n'
 		return
 	fi
 	
 	local id=$1
-	read_server_conf_func sftp_callback_func "$id"
-	local r=$?
-	if [[ $r -eq 0 ]]; then
-		print_err_code_msg_func id_not_exist "$id"
+	read_server_conf_func "$id"
+	local result=$?
+	if [[ $result -eq 0 ]]; then
+		printf 'invalid id\n'
+		return
 	fi
+	
+	local host=${server['host']}
+	local port=${server['port']}
+	local user=${server['user']}
+	local passwd=${server['passwd']}
+	local key_file=${server['key_file']}
+
+	expect -c "
+	set timeout 60
+	spawn sftp -P ${port} ${user}@${host}
+	expect {
+		\"*yes/no*\" { send \"yes\r\"; exp_continue }
+		\"*assword:*\" { send \"${passwd}\n\" }
+	}
+	interact
+	"
 }
 
 # scp命令帮助
 function scp_help_func(){
-	printf '  %s\t%s\n' 'scp' ''
-	printf '  \t%s\t%s\n' 'Usage: '
-	printf '  \t\t%s\t%s\n' 'scp {id} put {local file name} {remote file name}'
-	printf '  \t\t%s\t%s\n' 'scp {id} get {remote file name} {local file name}'
-}
-
-# scp命令回调
-function scp_callback_func(){
-	return 1
+	printf '  %s\n' 'scp'
+	printf '  \t%s\n' 'Usage: '
+	printf '  \t%s\n' 'scp {id} put {local file} {remote file}'
+	printf '  \t%s\n' 'scp {id} get {remote file} {local file}'
 }
 
 # scp命令
@@ -768,26 +323,165 @@ function scp_func(){
 		return
 	fi
 	
-	if [[ $# -ne 1 ]]; then
-		local str="$@"
-		print_err_code_msg_func invalid_parameter "$str"
+	if [[ $# -ne 4 ]]; then
+		printf 'invalid parameter\n'
 		return
 	fi
 	
 	local id=$1
-	read_server_conf_func sftp_callback_func "$id"
-	local r=$?
-	if [[ $r -eq 0 ]]; then
-		print_err_code_msg_func id_not_exist "$id"
+	read_server_conf_func "$id"
+	local result=$?
+	if [[ $result -eq 0 ]]; then
+		printf 'invalid id\n'
+		return
+	fi
+	
+	local host=${server['host']}
+	local port=${server['port']}
+	local user=${server['user']}
+	local passwd=${server['passwd']}
+	local key_file=${server['key_file']}
+	
+	if [[ "$2" == 'put' ]]; then
+		local local_file=$3
+		local remote_file=$4
+		expect -c "
+		set timeout 60
+		
+		# scp（secure copy）是一个基于 SSH 协议在网络之间进行安全传输的命令
+		# -v 输出详细信息
+		# -r 递归复制目录及其内容
+		# -p 保留文件的访问和修改时间
+		# -C 在复制过程中压缩文件或目录
+		# -6 使用 IPv6 协议
+		# -i 指定身份验证文件（例如私钥文件）
+		# -P 指定远程主机的 sshd 端口号
+		
+		# 从本地复制文件到远程主机
+		spawn scp -v -r -p -C -P ${port} ${local_file} ${user}@${host}:${remote_file}
+		
+		expect {
+			\"*yes/no*\" { send \"yes\r\"; exp_continue }
+			\"*assword:*\" { send \"${passwd}\n\" }
+		}
+		interact
+		"
+		
+	elif [[ "$2" == 'get' ]]; then
+		local remote_file=$3
+		local local_file=$4
+		expect -c "
+		set timeout 60
+		
+		# 从远程主机复制文件到本地
+		spawn scp -v -r -p -C -P ${port} ${user}@${host}:${remote_file} ${local_file}
+		
+		expect {
+			\"*yes/no*\" { send \"yes\r\"; exp_continue }
+			\"*assword:*\" { send \"${passwd}\n\" }
+		}
+		interact
+		"
+		
+	else
+		printf 'invalid operation\n'
 	fi
 }
 
 # rsync命令帮助
 function rsync_help_func(){
-	printf '  %s\t%s\n' 'rsync' ''
-	printf '  \t%s\t%s\n' 'Usage: '
-	printf '  \t\t%s\t%s\n' 'rsync {id} put {local file name} {remote file name}'
-	printf '  \t\t%s\t%s\n' 'rsync {id} get {remote file name} {local file name}'
+	printf '  %s\t\n' 'rsync'
+	printf '  \t%s\n' 'Usage: '
+	printf '  \t%s\n' 'rsync {id} put {local file} {remote file}'
+	printf '  \t%s\n' 'rsync {id} get {remote file} {local file}'
+}
+
+# rsync命令
+function rsync_func(){
+	if [[ $# -eq 0 ]]; then
+		rsync_help_func
+		return
+	fi
+	
+	if [[ $# -ne 4 ]]; then
+		printf 'invalid parameter\n'
+		return
+	fi
+	
+	local id=$1
+	read_server_conf_func "$id"
+	local result=$?
+	if [[ $result -eq 0 ]]; then
+		printf 'invalid id\n'
+		return
+	fi
+	
+	local host=${server['host']}
+	local port=${server['port']}
+	local user=${server['user']}
+	local passwd=${server['passwd']}
+	local key_file=${server['key_file']}
+	
+	if [[ "$2" == 'put' ]]; then
+		local local_file=$3
+		local remote_file=$4
+		expect -c "
+		set timeout 60
+		
+		# 注：使用 rsync 时，两端都需要安装 rsync
+
+		# rsync 默认使用 SSH 进行远程登录和数据传输
+		# \$ rsync [OPTION]... SRC [SRC]... [USER@]HOST:DEST
+		# \$ rsync [OPTION]... [USER@]HOST:SRC [DEST]
+		# -a 归档模式，表示以递归方式传输文件，并保持所有属性，它等同于-r、-l、-p、-t、-g、-o、-D 选项。-a 选项后面可以跟一个 --no-OPTION，表示关闭 -r、-l、-p、-t、-g、-o、-D 中的某一个，比如-a --no-l 等同于 -r、-p、-t、-g、-o、-D 选项。
+		# -r 以递归模式处理子目录，它主要是针对目录来说的，如果单独传一个文件不需要加 -r 选项，但是传输目录时必须加。
+		# -v 打印一些信息，比如文件列表、文件数量等。
+		# -l 保留软连接。
+		# -L 像对待常规文件一样处理软连接。如果是 SRC 中有软连接文件，则加上该选项后，将会把软连接指向的目标文件复制到 DEST。
+		# -p 保持文件权限。
+		# -t 保持文件时间信息。
+		# -g 保持文件属组信息。
+		# -o 保持文件属主信息。
+		# -D 保持设备文件信息。
+		# --port=PORT specify double-colon alternate port number.
+		# --delete 删除 DEST 中 SRC 没有的文件。
+		# --exclude=PATTERN 指定排除不需要传输的文件，等号后面跟文件名，可以是通配符模式（如 *.txt）。
+		# --progress 在同步的过程中可以看到同步的过程状态，比如统计要同步的文件数量、 同步的文件传输速度等。
+		# -u 把 DEST 中比 SRC 还新的文件排除掉，不会覆盖。
+		# -z 压缩传输。
+		# --rsh=COMMAND, -e specify the remote shell to use
+		
+		# 从本地复制文件到远程主机
+		#spawn rsync -avz --delete --progress ${local_file} ${user}@${host}:${remote_file}
+		# https://www.linuxquestions.org/questions/linux-software-2/rsync-ssh-on-different-port-448112/
+		spawn rsync -avz --delete --progress -e \"ssh -p ${port}\" ${local_file} ${user}@${host}:${remote_file}
+		
+		expect {
+			\"*yes/no*\" { send \"yes\r\"; exp_continue }
+			\"*assword:*\" { send \"${passwd}\n\" }
+		}
+		interact
+		"
+		
+	elif [[ "$2" == 'get' ]]; then
+		local remote_file=$3
+		local local_file=$4
+		expect -c "
+		set timeout 60
+
+		# 从远程主机复制文件到本地
+		spawn rsync -avz --delete --progress -e \"ssh -p ${port}\" ${user}@${host}:${remote_file} ${local_file} 
+
+		expect {
+			\"*yes/no*\" { send \"yes\r\"; exp_continue }
+			\"*assword:*\" { send \"${passwd}\n\" }
+		}
+		interact
+		"
+		
+	else
+		printf 'invalid operation\n'
+	fi
 }
 
 # quit命令帮助
@@ -799,9 +493,6 @@ function quit_help_func(){
 # 命令帮助
 function help_func(){
 	ls_help_func
-	add_help_func
-	del_help_func
-	upd_help_func
 	get_help_func
 	ssh_help_func
 	sftp_help_func
@@ -815,107 +506,91 @@ ls_func
 
 while true; do
 	printf '\n'
-	# -p prompt 提示字符串
-	read -p 'xshell$ ' cmd str
+	# -p prompt（提示字符串）
+	read -p 'xshell$ ' cmd parameters_str
 	if [[ "$cmd" == '' ]]; then
 		continue
 	fi
 	
 	#echo cmd $cmd
-	#echo str $str
+	#echo parameters_str $parameters_str
 
-	arr=()
+	parameters=()
 	index=0
 	
 	while true; do
 		# 去除字符串前后空格
-		str="${str#"${str%%[![:space:]]*}"}"
-		str="${str%"${str##*[![:space:]]}"}"
+		parameters_str="${parameters_str#"${parameters_str%%[![:space:]]*}"}"
+		parameters_str="${parameters_str%"${parameters_str##*[![:space:]]}"}"
 		
-		# ${str%%pattern*}: 删除从 str 开头开始匹配的最长的 pattern*
+		# ${parameters_str%%pattern*}: 删除从 parameters_str 开头开始匹配的最长的 pattern*
 		# [[:space:]]: 匹配任何一个空白字符
-		# 例如，如果str的值为"This is a sample string"，那么${str%%[[:space:]]*}将返回"This"，即删除了第一个空格及其后的所有字符
+		# 例如，如果str的值为"This is a sample string"，那么${parameters_str%%[[:space:]]*}将返回"This"，即删除了第一个空格及其后的所有字符
 		
-		substr=
+		parameters_substr=
 		
 		# 判断字符串是否以 双引号 开头
-		if [[ "$str" == '"'* ]]; then
-			str=${str:1}
-			substr=${str%%\"[[:space:]]*}
-			if [[ "$str" == "$substr" ]]; then
-				substr=${str%%\"*}
-				str=
+		if [[ "$parameters_str" == '"'* ]]; then
+			parameters_str=${parameters_str:1}
+			parameters_substr=${parameters_str%%\"[[:space:]]*}
+			if [[ "$parameters_str" == "$parameters_substr" ]]; then
+				parameters_substr=${parameters_str%%\"*}
+				parameters_str=
 			else
-				len=${#substr}
+				len=${#parameters_substr}
 				let len=len+2
-				str=${str:${len}}
+				parameters_str=${parameters_str:${len}}
 			fi
 		
 		# 空格分隔
 		else
-			substr=${str%%[[:space:]]*}
-			len=${#substr}
+			parameters_substr=${parameters_str%%[[:space:]]*}
+			len=${#parameters_substr}
 			let len=len+1
-			str=${str:${len}}
+			parameters_str=${parameters_str:${len}}
 		fi
-		if [[ $substr == '' ]]; then
+		if [[ $parameters_substr == '' ]]; then
 			break
 		fi
 		
-		#echo $index $substr '('$str')'
-		arr[$index]=$substr
+		#echo $index $parameters_substr '('$parameters_str')'
+		parameters[$index]=$parameters_substr
 		let index++
 	done
 	
-	#echo arr ${#arr[@]} ${arr[@]}
-	
-	# help
-	if [[ "$cmd" == 'help' ]]; then
-		help_func
+	#echo parameters ${#parameters[@]} ${parameters[@]}
 	
 	# ls
-	elif [[ "$cmd" == 'ls' ]]; then
+	if [[ "$cmd" == 'ls' ]]; then
 		ls_func
-	
-	# add
-	elif [[ "$cmd" == 'add' ]]; then
-		add_func "${arr[@]}"
-	
-	# del
-	elif [[ "$cmd" == 'del' ]]; then
-		del_func "${arr[@]}"
-	
-	# upd
-	elif [[ "$cmd" == 'upd' ]]; then
-		upd_func "${arr[@]}"
 	
 	# get
 	elif [[ "$cmd" == 'get' ]]; then
-		get_func "${arr[@]}"
-	
-	# info
-	elif [[ "$cmd" == 'info' ]]; then
-		info_func "${arr[@]}"
+		get_func "${parameters[@]}"
 	
 	# ssh
 	elif [[ "$cmd" == 'ssh' ]]; then
-		ssh_func "${arr[@]}"
+		ssh_func "${parameters[@]}"
 	
 	# sftp
 	elif [[ "$cmd" == 'sftp' ]]; then
-		sftp_func "${arr[@]}"
+		sftp_func "${parameters[@]}"
 	
 	# scp
 	elif [[ "$cmd" == 'scp' ]]; then
-		scp_func "${arr[@]}"
+		scp_func "${parameters[@]}"
 	
 	# rsync
 	elif [[ "$cmd" == 'rsync' ]]; then
-		rsync_func "${arr[@]}"
+		rsync_func "${parameters[@]}"
 	
 	# quit
 	elif [[ "$cmd" == 'quit' ]]; then
 		break
+	
+	# help
+	elif [[ "$cmd" == 'help' ]]; then
+		help_func
 	
 	# command not found
 	else
