@@ -15,10 +15,6 @@ EOF
 # 双引号会先解析变量的内容
 # 单引号包裹的内容表示原样输出
 
-# 使用 local 关键字来定义局部变量
-# 1）在函数内部定义变量，则变量的作用域仅限于函数内部
-# 2）在代码块内部定义变量，则变量的作用域仅限于代码块内部
-
 
 # 获取 xshell.sh 文件的真实路径
 xshell_file=$(realpath $(ls -al $0 | awk '{print $NF}'))
@@ -41,48 +37,185 @@ echo "Server File: ${server_file}"
 echo ''
 
 
-# 打印数组
-print_array() {
-	# 将传递给函数的所有参数作为数组
-	local array=("$@")
+#exit 0
+
+
+# 声明关联数组，用来存储服务器配置信息
+# 'declare'：声明变量
+# '-A'：指定是一个关联数组
+# 注：Bash 4.0+ 才支持关联数组。查看 Bash 版本：$ bash --version
+declare -A servers
+
+# 声明整数变量，用于存储服务器数量
+declare -i count=0
+
+declare host=''
+declare port=''
+declare user=''
+declare passwd=''
+declare key_file=''
+declare rem=''
+
+declare -i id_width=2
+declare -i host_width=4
+declare -i port_width=4 
+declare -i user_width=4
+declare -i passwd_or_key_file_width=15
+declare -i rem_width=3
+
+init() {
+	# 使用文件描述符读取服务器配置文件内容
+	# 使用文件描述符可以避免重复打开和关闭文件，尤其是在循环读取文件内容时，可以显著提高效率。
+	# 文件描述符一旦打开，可以在整个脚本或程序执行期间保持打开状态，直到显式关闭为止。
+
+	# 打开文件描述符
+	# 将文件关联到文件描述符 3 上，使得 read 命令可以从文件描述符 3 中读取数据，而不是直接从文件中读取。
+	exec 3< "${server_file}"
 	
-	# 数组长度
-	local length=${#array[@]}
-	echo "length=${length}"
-	
-	# 打印数组所有元素值
-	echo "array(${length})=${array[@]}"
-	
-	# 遍历数组并打印每个元素的索引和值
-	for index in "${!array[@]}"; do
-		echo "array[${index}]=${array[${index}]}"
+	local id=0
+
+	# 逐行读取文件内容
+	while IFS= read -r -u 3 line; do
+		# ':0:1'：表示截取变量值从索引等于0开始，截取长度为 1
+		if [[ "${line:0:1}" == "-" ]]; then
+			let id++
+			
+			line=" ${line:1}"
+			
+			local id_str="${id}"
+			local length=${#id_str}
+			if [[ ${length} -gt ${id_width} ]]; then
+				id_width=${length}
+			fi
+		fi
+		
+		local prefix=
+		local length=
+		
+		prefix='  host:'
+		length=${#prefix}
+		if [[ "${line:0:${length}}" == "${prefix}" ]]; then
+			local host="${line:${length}}"
+			
+			# 去除字符串前后空格
+			host="${host#"${host%%[![:space:]]*}"}"
+			host="${host%"${host##*[![:space:]]}"}"
+			
+			servers["${id},host"]="${host}"
+			
+			local length=${#host}
+			if [[ ${length} -gt ${host_width} ]]; then
+				host_width=${length}
+			fi
+			
+			continue
+		fi
+		
+		prefix='  port:'
+		length=${#prefix}
+		if [[ "${line:0:${length}}" == "${prefix}" ]]; then
+			local port="${line:${length}}"
+			port="${port#"${port%%[![:space:]]*}"}"
+			port="${port%"${port##*[![:space:]]}"}"
+			servers["${id},port"]="${port}"
+			
+			local length=${#port}
+			if [[ ${length} -gt ${port_width} ]]; then
+				port_width=${length}
+			fi
+			
+			continue
+		fi
+		
+		prefix='  user:'
+		length=${#prefix}
+		if [[ "${line:0:${length}}" == "${prefix}" ]]; then
+			local user="${line:${length}}"
+			user="${user#"${user%%[![:space:]]*}"}"
+			user="${user%"${user##*[![:space:]]}"}"
+			servers["${id},user"]="${user}"
+			
+			local length=${#user}
+			if [[ ${length} -gt ${user_width} ]]; then
+				user_width=${length}
+			fi
+			
+			continue
+		fi
+		
+		prefix='  passwd:'
+		length=${#prefix}
+		if [[ "${line:0:${length}}" == "${prefix}" ]]; then
+			local passwd="${line:${length}}"
+			passwd="${passwd#"${passwd%%[![:space:]]*}"}"
+			passwd="${passwd%"${passwd##*[![:space:]]}"}"
+			servers["${id},passwd"]="${passwd}"
+			continue
+		fi
+		
+		prefix='  key-file:'
+		length=${#prefix}
+		if [[ "${line:0:${length}}" == "${prefix}" ]]; then
+			local key_file="${line:${length}}"
+			key_file="${key_file#"${key_file%%[![:space:]]*}"}"
+			key_file="${key_file%"${key_file##*[![:space:]]}"}"
+			servers["${id},key-file"]="${key_file}"
+			continue
+		fi
+		
+		prefix='  rem:'
+		length=${#prefix}
+		if [[ "${line:0:${length}}" == "${prefix}" ]]; then
+			local rem="${line:${length}}"
+			rem="${rem#"${rem%%[![:space:]]*}"}"
+			rem="${rem%"${rem##*[![:space:]]}"}"
+			servers["${id},rem"]="${rem}"
+			
+			local length=${#rem}
+			if [[ ${length} -gt ${rem_width} ]]; then
+				rem_width=${length}
+			fi
+			
+			continue
+		fi
 	done
+	
+	count=id
+	
+	# 关闭文件描述符
+	# 关闭文件描述符 3，释放与文件的关联。
+	exec 3<&-
 }
 
-test_print_array() {
-	# 声明数组
-	declare -a array1
-	# 初始化数组
-	array1[0]='A1'
-	array1[1]='B1'
-	array1[2]='C1'
+init
+
+get_server() {
+	local id=$1
 	
-	# 打印数组
-	echo ''
-	print_array "${array1[@]}"
+	host=${servers["${id},host"]}
+	if [[ "${host}" == '' ]]; then
+		# 服务器信息不存在
+		return 1
+	fi
 	
-	# 声明并初始化数组
-	local array2=('A2' 'B2' 'C2')
+	port=${servers["${id},port"]}
+	user=${servers["${id},user"]}
+	passwd=${servers["${id},passwd"]}
+	key_file=${servers["${id},key-file"]}
+	rem=${servers["${id},rem"]}
 	
-	# 打印数组
-	echo ''
-	print_array "${array2[@]}"
-	
-	exit 0
+	return 0
 }
 
-#test_print_array
 
+# 服务器列表命令帮助
+_ls_help() {
+	printf '  %s\t%s\n' 'ls' 'Server List'
+	printf '  \t%s\n' 'Usage: ls'
+}
+
+#_ls_help
+#exit 0
 
 # 生成分隔线
 generate_separator() {
@@ -103,180 +236,9 @@ test_generate_separator() {
 
 #test_generate_separator
 
-
-# 返回两个数值中最大值
-get_max() {
-	local number1=$1
-	local number2=$2
-	if [[ ${number1} -gt ${number2} ]]; then
-		echo ${number1}
-	else
-		echo ${number2}
-	fi
-}
-
-test_get_max() {
-	local max=$(get_max 100 20)
-	echo "max=${max}"
-	exit 0
-}
-
-#test_get_max
-
-
-# 获取服务器数量
-get_server_count() {
-	# 使用 grep 统计以 '-' 开头的行数
-	# -c 统计匹配到的行数
-	# 正则表达式 '^-' 匹配以 '-' 开头的行
-	local count=$(grep -c '^-' "${server_file}")
-	
-    echo ${count}
-}
-
-test_get_server_count() {
-	local count=$(get_server_count)
-	echo "count=${count}"
-	exit 0
-}
-
-#test_get_server_count
-
-
-# 获取服务器值
-get_server_value() {
-	local i=$1
-	local name=$2
-
-    # 使用 awk 获取指定行并提取值
-	# '-v v_i=${i}'：将 Shell 变量 i 的值传递给 awk 内部的 v_i 变量
-	# 正则表达式 '/^[[:blank:]]*host:.+/'：匹配 '{任意数量的空格或制表符开头}host:{任意字符}'
-	# '{ i++; if (i == v_i) { value=$2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print value; exit 0 } }'：
-	# 	1）每次匹配到符合条件的行，计数器 i 自增，当 i 等于 v_i 时
-	# 	2）将第二个字段 $2（即 '{任意字符}' 的值）赋给变量 value
-	# 	3）'gsub(/^[[:space:]]+|[[:space:]]+$/, "", value);'：去除 value 变量前后空格。'^[[:space:]]+' 匹配字符串开头的一个或多个空白字符（包括空格、制表符、换行符等），'[[:space:]]+$' 匹配字符串结尾的一个或多个空白字符（包括空格、制表符、换行符等），替换成 ""（空字符串）
-	# 	4）打印 value，并退出 awk
-	#local value=$(awk -v v_i=${i} '/^[[:blank:]]*host:.+/ { i++; if (i == v_i) { value=$2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print value; exit 0 } }' "${server_file}")
-	
-	# '$0 ~ "^[[:blank:]]*" v_name ":.+"' 将正则表达式拼接为一个字符串，其中 v_name 是 awk 中的变量
-	local value=$(awk -v v_i=${i} -v v_name="${name}" '$0 ~ "^[[:blank:]]*" v_name ":.+" { i++; if (i == v_i) { value=$2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print value; exit 0 } }' "${server_file}")
-	
-    echo ${value}
-}
-
-test_get_server_value() {
-	local host=$(get_server_value 1 'host')
-	echo "host=${host}"
-	
-	host=$(get_server_value 1 'port')
-	echo "host=${host}"
-	
-	exit 0
-}
-
-#test_get_server_value
-
-
-# 获取服务器值最大长度
-get_server_value_max_length() {
-	local name=$1
-	
-	# '{ print length($2) }'：打印第二个字段 $2（即 '{任意字符}' 的值）的长度
-	# 'sort -rn'：按逆序排序（从大到小），以找到最大长度
-	# 'head -n 1'：取排序后的第一行，即最大的长度
-	local max_length=$(awk -v v_name="${name}" '$0 ~ "^[[:blank:]]*" v_name ":.+" { value=$2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print length(value) }' "${server_file}" | sort -rn | head -n 1)
-		
-	echo ${max_length}
-}
-
-test_get_server_value_max_length() {
-	local max_length=$(get_server_value_max_length 'host')
-	echo "max_length=${max_length}"
-	
-	max_length=$(get_server_value_max_length 'port')
-	echo "max_length=${max_length}"
-	
-	exit 0
-}
-
-#test_get_server_value_max_length
-
-
-# 声明数组，用于存储服务器信息
-declare -a server
-
-# 获取服务信息
-get_server() {
-	local i=$1
-	
-	# 使用 unset 删除整个数组
-	unset server
-	
-	# 初始化数组
-	local host=$(get_server_value ${i} 'host')
-	if [[ "${host}" != '' ]]; then		
-		server[0]=${host}
-		local port=$(get_server_value ${i} 'port')
-		server[1]=${port}
-		local user=$(get_server_value ${i} 'user')
-		server[2]=${user}
-		local passwd=$(get_server_value ${i} 'passwd')
-		server[3]=${passwd}
-		local key_file=$(get_server_value ${i} 'key-file')
-		server[4]=${key_file}
-		server[4]=''
-		local rem=$(get_server_value ${i} 'rem')
-		server[5]=${rem}
-	fi
-}
-
-test_get_server() {
-	echo ''
-	get_server 1
-	print_array "${server[@]}"
-	
-	echo ''
-	get_server 2
-	print_array "${server[@]}"
-	
-	echo ''
-	get_server 3
-	print_array "${server[@]}"
-	
-	exit 0
-}
-
-#test_get_server
-
-
-# 服务器列表命令帮助
-_ls_help() {
-	printf '  %s\t%s\n' 'ls' 'Server List'
-	printf '  \t%s\n' 'Usage: ls'
-}
-
-#_ls_help
-#exit 0
-
 # 服务器列表
 _ls() {
-	# 获取服务器数量
-	local server_count=$(get_server_count)
-	
 	# 格式化
-	local id_width=$(get_max ${#server_count} 2)
-	local host_width=$(get_max $(get_server_value_max_length 'host') 4)
-	local port_width=$(get_max $(get_server_value_max_length 'port') 4) 
-	local user_width=$(get_max $(get_server_value_max_length 'user') 4)
-	local passwd_or_key_file_width=15
-	local rem_width=$(get_max $(get_server_value_max_length 'rem') 3)
-	#echo 'id_width  ='${id_width}
-	#echo 'host_width='${host_width}
-	#echo 'port_width='${port_width}
-	#echo 'user_width='${user_width}
-	#echo 'passwd_or_key_file_width='${passwd_or_key_file_width}
-	#echo 'rem_width ='${rem_width}
-	#echo ''
 	local format="%-${id_width}s  %-${host_width}s  %-${port_width}s  %-${user_width}s  %-${passwd_or_key_file_width}s  %s\n"
 	
 	# 打印表头
@@ -286,16 +248,10 @@ _ls() {
 	printf "${format}" "$(generate_separator ${id_width})" "$(generate_separator ${host_width})" "$(generate_separator ${port_width})" "$(generate_separator ${user_width})" "$(generate_separator ${passwd_or_key_file_width})" "$(generate_separator ${rem_width})"
 	
 	# 使用 for 循环遍历 server_count 变量
-	for (( i=1; i<=${server_count}; i++ )); do
-		get_server "${i}"
-		#print_array "${server[@]}"
-		local host="${server[0]}"
-		local port="${server[1]}"
-		local user="${server[2]}"
-		local passwd="${server[3]}"
-		local key_file="${server[4]}"
-		local rem="${server[5]}"
-		printf "${format}" "${i}" "${host}" "${port}" "${user}" '******' "${rem}"
+	for (( id=1; id<=${count}; id++ )); do
+		if get_server "${id}"; then
+			printf "${format}" "${id}" "${host}" "${port}" "${user}" '******' "${rem}"
+		fi
 	done
 }
 
@@ -337,19 +293,10 @@ _get() {
 		return
 	fi
 	
-	get_server "${id}"
-	#print_array "${server[@]}"
-	local host="${server[0]}"
-	if [[ "${host}" == '' ]]; then
+	if ! get_server "${id}"; then
 		printf "%s: id not found\n" "${id}"
 		return
 	fi
-	
-	local port="${server[1]}"
-	local user="${server[2]}"
-	local passwd="${server[3]}"
-	local key_file="${server[4]}"
-	local rem="${server[5]}"
 	
 	printf 'Host\t: %s\n' "${host}"
 	printf 'Port\t: %s\n' "${port}"
@@ -394,19 +341,10 @@ _ssh() {
 		return
 	fi
 	
-	get_server "${id}"
-	#print_array "${server[@]}"
-	local host="${server[0]}"
-	if [[ "${host}" == '' ]]; then
+	if ! get_server "${id}"; then
 		printf "%s: id not found\n" "${id}"
 		return
 	fi
-	
-	local port="${server[1]}"
-	local user="${server[2]}"
-	local passwd="${server[3]}"
-	local key_file="${server[4]}"
-	local rem="${server[5]}"
 
 	# 使用expect自动登录远程服务器
 	expect -c "
@@ -466,19 +404,10 @@ _sftp() {
 		return
 	fi
 	
-	get_server "${id}"
-	#print_array "${server[@]}"
-	local host="${server[0]}"
-	if [[ "${host}" == '' ]]; then
+	if ! get_server "${id}"; then
 		printf "%s: id not found\n" "${id}"
 		return
 	fi
-	
-	local port="${server[1]}"
-	local user="${server[2]}"
-	local passwd="${server[3]}"
-	local key_file="${server[4]}"
-	local rem="${server[5]}"
 	
 	expect -c "
 	set timeout 60
@@ -527,19 +456,10 @@ _scp() {
 		return
 	fi
 	
-	get_server "${id}"
-	#print_array "${server[@]}"
-	local host="${server[0]}"
-	if [[ "${host}" == '' ]]; then
+	if ! get_server "${id}"; then
 		printf "%s: id not found\n" "${id}"
 		return
 	fi
-	
-	local port="${server[1]}"
-	local user="${server[2]}"
-	local passwd="${server[3]}"
-	local key_file="${server[4]}"
-	local rem="${server[5]}"
 	
 	local type="${args[1]}"
 	if [[ "${type}" == 'put' ]]; then
@@ -624,19 +544,10 @@ _rsync() {
 		return
 	fi
 	
-	get_server "${id}"
-	#print_array "${server[@]}"
-	local host="${server[0]}"
-	if [[ "${host}" == '' ]]; then
+	if ! get_server "${id}"; then
 		printf "%s: id not found\n" "${id}"
 		return
 	fi
-	
-	local port="${server[1]}"
-	local user="${server[2]}"
-	local passwd="${server[3]}"
-	local key_file="${server[4]}"
-	local rem="${server[5]}"
 	
 	local type="${args[1]}"
 	if [[ "${type}" == 'put' ]]; then
