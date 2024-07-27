@@ -1,12 +1,12 @@
 # xshell
 
-ssh, sftp, scp, rsync terminal
+SSH, SFTP, SCP, RSYNC
 
 
 # 安装
 
 ```shell
-# 安装expect
+# 安装自动化交互式进程工具
 $ apt install expect
 
 $ cd /usr/local/src
@@ -22,7 +22,7 @@ $ ln -sf /usr/local/src/xshell/xshell.sh /usr/local/bin/xshell.sh
 $ xshell.sh
 ################################################
 #                                              #
-# ssh, sftp, scp, rsync terminal               #
+# SSH, SFTP, SCP, RSYNC                        #
 #                                              #
 # Auth  : xiangqian                            #
 # Date  : 18:39 ‎2023‎/0‎1‎/‎17                     #‎

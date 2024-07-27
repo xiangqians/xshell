@@ -1,206 +1,355 @@
 #!/bin/bash
 
-echo '################################################'
-echo '#                                              #'
-echo '# ssh, sftp, scp, rsync terminal               #'
-echo '#                                              #'
-echo '# Auth  : xiangqian                            #'
-echo '# Date  : 18:39 ‎2023‎/0‎1‎/‎17                     #‎'
-echo '# GitHub: https://github.com/xiangqians/xshell #'
-echo '################################################'
+cat << EOF
+################################################
+#                                              #
+# SSH, SFTP, SCP, RSYNC                        #
+#                                              #
+# Auth  : xiangqian                            #
+# Date  : 18:39 ‎2023‎/0‎1‎/‎17                     #‎
+# GitHub: https://github.com/xiangqians/xshell #
+################################################
+EOF
+
 
 # 双引号会先解析变量的内容
 # 单引号包裹的内容表示原样输出
 
-# 使用local关键字来定义局部变量，它只在函数内部有效，在函数外部无法访问该变量
+# 使用 local 关键字来定义局部变量
+# 1）在函数内部定义变量，则变量的作用域仅限于函数内部
+# 2）在代码块内部定义变量，则变量的作用域仅限于代码块内部
 
-# xshell.sh实际文件路径
-# 使用realpath命令获取文件的绝对路径
-XSHELL_FILE=$(realpath $(ls -al $0 | awk '{print $NF}'))
-# 判断是否是软链接文件
+
+# 获取 xshell.sh 文件的真实路径
+xshell_file=$(realpath $(ls -al $0 | awk '{print $NF}'))
+# 判断 xshell.sh 是否是软链接文件
 if [[ -h "$0" ]]; then
-	XSHELL_LN_FILE=$(realpath -s $0)
-	echo -e 'XShell  File\t : '${XSHELL_LN_FILE}' -> '${XSHELL_FILE}
+	local xshell_ln_file=$(realpath -s $0)
+	echo 'XShell File: '${xshell_ln_file}' -> '${xshell_file}
 else
-	echo -e 'XShell  File\t : '${XSHELL_FILE}
+	echo 'XShell File: '${xshell_file}
 fi
 
-# 获取xshell.sh文件所在的目录
-XSHELL_FILE_DIR=${XSHELL_FILE%/*}
+
+# 获取 xshell.sh 文件所在的目录
+xshell_dir=${xshell_file%/*}
+
 
 # 服务器配置文件
-SERVER_CONF_FILE="${XSHELL_FILE_DIR}/server.conf"
-echo -e "Server  Conf File: ${SERVER_CONF_FILE}"
+server_file="${xshell_dir}/server.yaml"
+echo "Server File: ${server_file}"
+echo ''
 
-# 定义一个空map，存储服务器配置信息
-declare -A server=()
 
-# 清空map
-function clear_map(){
-	for key in ${!server[@]}; do
-		unset server[$key]
+# 打印数组
+print_array() {
+	# 将传递给函数的所有参数作为数组
+	local array=("$@")
+	
+	# 数组长度
+	local length=${#array[@]}
+	echo "length=${length}"
+	
+	# 打印数组所有元素值
+	echo "array(${length})=${array[@]}"
+	
+	# 遍历数组并打印每个元素的索引和值
+	for index in "${!array[@]}"; do
+		echo "array[${index}]=${array[${index}]}"
 	done
 }
 
-# 读取服务配置文件
-function read_server_conf_func(){
-	# 目标id
-	local target_id=$1
+test_print_array() {
+	# 声明数组
+	declare -a array1
+	# 初始化数组
+	array1[0]='A1'
+	array1[1]='B1'
+	array1[2]='C1'
 	
-	# 回调函数
-	local callback_func=$2
-
-	# 服务器id
-	local id=1
+	# 打印数组
+	echo ''
+	print_array "${array1[@]}"
 	
-	# 清空map
-	clear_map
+	# 声明并初始化数组
+	local array2=('A2' 'B2' 'C2')
 	
-	# 逐行读取文件内容
-	# read命令读取文件时会自动去掉行前后的空格
-	# IFS=用于禁用行分隔符
-	# -r参数用于禁止对反斜杠进行转义
-	# || [[ -n "$line" ]]的作用是保证在读取到最后一行时，循环仍然能够继续执行
-	while IFS= read -r line || [[ -n "$line" ]]; do
-		# 去除字符串前后空格
-		line="${line#"${line%%[![:space:]]*}"}"
-		line="${line%"${line##*[![:space:]]}"}"
-		#echo '"'$line'"'
-		
-		# id
-		if [[ $line == '-' ]]; then
-			local host=${server['host']}
-			if [[ "$host" != '' ]]; then
-				server['id']=$id
-				$callback_func
-				if [[ "$id" == "$target_id" ]]; then
-					return 1
-				fi
-				clear_map
-				let id++
-			fi
-		
-		# host
-		elif [[ $line =~ ^host: ]]; then
-			local host=${line:5}
-			host="${host#"${host%%[![:space:]]*}"}"
-			host="${host%"${host##*[![:space:]]}"}"
-			server['host']=$host
-		
-		# port
-		elif [[ $line =~ ^port: ]]; then
-			local port=${line:5}
-			port="${port#"${port%%[![:space:]]*}"}"
-			port="${port%"${port##*[![:space:]]}"}"
-			server['port']=$port
-			
-		# user
-		elif [[ $line =~ ^user: ]]; then
-			local user=${line:5}
-			user="${user#"${user%%[![:space:]]*}"}"
-			user="${user%"${user##*[![:space:]]}"}"
-			server['user']=$user
-		
-		# passwd
-		elif [[ $line =~ ^passwd: ]]; then
-			local passwd=${line:7}
-			passwd="${passwd#"${passwd%%[![:space:]]*}"}"
-			passwd="${passwd%"${passwd##*[![:space:]]}"}"
-			server['passwd']=$passwd
-		
-		# key-file
-		elif [[ $line =~ ^key-file: ]]; then
-			local key_file=${line:9}
-			key_file="${key_file#"${key_file%%[![:space:]]*}"}"
-			key_file="${key_file%"${key_file##*[![:space:]]}"}"
-			server['key_file']=$key_file
-		
-		# rem
-		elif [[ $line =~ ^rem: ]]; then
-			local rem=${line:4}
-			rem="${rem#"${rem%%[![:space:]]*}"}"
-			rem="${rem%"${rem##*[![:space:]]}"}"
-			server['rem']=$rem
-		fi
-	done < ${SERVER_CONF_FILE}
+	# 打印数组
+	echo ''
+	print_array "${array2[@]}"
 	
-	local host=${server['host']}
-	if [[ "$host" != '' ]]; then
-		server['id']=$id
-		$callback_func
-		if [[ "$id" == "$target_id" ]]; then
-			return 1
-		fi
-	fi
-	clear_map
-	
-	return 0
+	exit 0
 }
 
+#test_print_array
+
+
+# 生成分隔线
+generate_separator() {
+    local length=$1
+    local separator=""
+	local i=0
+    for (( ; i < length; i++)); do
+        separator+="-"
+    done
+    echo "${separator}"
+}
+
+test_generate_separator() {
+	local separator=$(generate_separator 2)
+	echo "separator=${separator}"
+	exit 0
+}
+
+#test_generate_separator
+
+
+# 返回两个数值中最大值
+get_max() {
+	local number1=$1
+	local number2=$2
+	if [[ ${number1} -gt ${number2} ]]; then
+		echo ${number1}
+	else
+		echo ${number2}
+	fi
+}
+
+test_get_max() {
+	local max=$(get_max 100 20)
+	echo "max=${max}"
+	exit 0
+}
+
+#test_get_max
+
+
+# 获取服务器数量
+get_server_count() {
+	# 使用 grep 统计以 '-' 开头的行数
+	# -c 统计匹配到的行数
+	# 正则表达式 '^-' 匹配以 '-' 开头的行
+	local count=$(grep -c '^-' "${server_file}")
+	
+    echo ${count}
+}
+
+test_get_server_count() {
+	local count=$(get_server_count)
+	echo "count=${count}"
+	exit 0
+}
+
+#test_get_server_count
+
+
+# 获取服务器值
+get_server_value() {
+	local i=$1
+	local name=$2
+
+    # 使用 awk 获取指定行并提取值
+	# '-v v_i=${i}'：将 Shell 变量 i 的值传递给 awk 内部的 v_i 变量
+	# 正则表达式 '/^[[:blank:]]*host:.+/'：匹配 '{任意数量的空格或制表符开头}host:{任意字符}'
+	# '{ i++; if (i == v_i) { value=$2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print value; exit 0 } }'：
+	# 	1）每次匹配到符合条件的行，计数器 i 自增，当 i 等于 v_i 时
+	# 	2）将第二个字段 $2（即 '{任意字符}' 的值）赋给变量 value
+	# 	3）'gsub(/^[[:space:]]+|[[:space:]]+$/, "", value);'：去除 value 变量前后空格。'^[[:space:]]+' 匹配字符串开头的一个或多个空白字符（包括空格、制表符、换行符等），'[[:space:]]+$' 匹配字符串结尾的一个或多个空白字符（包括空格、制表符、换行符等），替换成 ""（空字符串）
+	# 	4）打印 value，并退出 awk
+	#local value=$(awk -v v_i=${i} '/^[[:blank:]]*host:.+/ { i++; if (i == v_i) { value=$2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print value; exit 0 } }' "${server_file}")
+	
+	# '$0 ~ "^[[:blank:]]*" v_name ":.+"' 将正则表达式拼接为一个字符串，其中 v_name 是 awk 中的变量
+	local value=$(awk -v v_i=${i} -v v_name="${name}" '$0 ~ "^[[:blank:]]*" v_name ":.+" { i++; if (i == v_i) { value=$2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print value; exit 0 } }' "${server_file}")
+	
+    echo ${value}
+}
+
+test_get_server_value() {
+	local host=$(get_server_value 1 'host')
+	echo "host=${host}"
+	
+	host=$(get_server_value 1 'port')
+	echo "host=${host}"
+	
+	exit 0
+}
+
+#test_get_server_value
+
+
+# 获取服务器值最大长度
+get_server_value_max_length() {
+	local name=$1
+	
+	# '{ print length($2) }'：打印第二个字段 $2（即 '{任意字符}' 的值）的长度
+	# 'sort -rn'：按逆序排序（从大到小），以找到最大长度
+	# 'head -n 1'：取排序后的第一行，即最大的长度
+	local max_length=$(awk -v v_name="${name}" '$0 ~ "^[[:blank:]]*" v_name ":.+" { value=$2; gsub(/^[[:space:]]+|[[:space:]]+$/, "", value); print length(value) }' "${server_file}" | sort -rn | head -n 1)
+		
+	echo ${max_length}
+}
+
+test_get_server_value_max_length() {
+	local max_length=$(get_server_value_max_length 'host')
+	echo "max_length=${max_length}"
+	
+	max_length=$(get_server_value_max_length 'port')
+	echo "max_length=${max_length}"
+	
+	exit 0
+}
+
+#test_get_server_value_max_length
+
+
+# 声明数组，用于存储服务器信息
+declare -a server
+
+# 获取服务信息
+get_server() {
+	local i=$1
+	
+	# 使用 unset 删除整个数组
+	unset server
+	
+	# 初始化数组
+	local host=$(get_server_value ${i} 'host')
+	if [[ "${host}" != '' ]]; then		
+		server[0]=${host}
+		local port=$(get_server_value ${i} 'port')
+		server[1]=${port}
+		local user=$(get_server_value ${i} 'user')
+		server[2]=${user}
+		local passwd=$(get_server_value ${i} 'passwd')
+		server[3]=${passwd}
+		local key_file=$(get_server_value ${i} 'key-file')
+		server[4]=${key_file}
+		server[4]=''
+		local rem=$(get_server_value ${i} 'rem')
+		server[5]=${rem}
+	fi
+}
+
+test_get_server() {
+	echo ''
+	get_server 1
+	print_array "${server[@]}"
+	
+	echo ''
+	get_server 2
+	print_array "${server[@]}"
+	
+	echo ''
+	get_server 3
+	print_array "${server[@]}"
+	
+	exit 0
+}
+
+#test_get_server
+
+
 # 服务器列表命令帮助
-function ls_help_func(){
-	printf '  %s\t%s\n' 'ls' 'server list'
+_ls_help() {
+	printf '  %s\t%s\n' 'ls' 'Server List'
 	printf '  \t%s\n' 'Usage: ls'
 }
 
-# 打印格式化
-FORMAT='%-5s %-20s %-10s %-20s %-16s %s\n'
-
-# 服务器列表回调函数
-function ls_callback_func(){	
-	#echo server ${server[@]}
-	
-	local id=${server['id']}
-	local host=${server['host']}
-	local port=${server['port']}
-	local user=${server['user']}
-	local passwd=${server['passwd']}
-	local key_file=${server['key_file']}
-	local rem=${server['rem']}
-	
-	printf "${FORMAT}" "${id}" "${host}" "${port}" "${user}" "******" "${rem}"
-	
-	return 0
-}
+#_ls_help
+#exit 0
 
 # 服务器列表
-function ls_func(){
-	printf "${FORMAT}" 'ID' 'HOST' 'PORT' 'USER' 'PASSWD/KEY-FILE' 'REM'
-	read_server_conf_func 0 ls_callback_func
+_ls() {
+	# 获取服务器数量
+	local server_count=$(get_server_count)
+	
+	# 格式化
+	local id_width=$(get_max ${#server_count} 2)
+	local host_width=$(get_max $(get_server_value_max_length 'host') 4)
+	local port_width=$(get_max $(get_server_value_max_length 'port') 4) 
+	local user_width=$(get_max $(get_server_value_max_length 'user') 4)
+	local passwd_or_key_file_width=15
+	local rem_width=$(get_max $(get_server_value_max_length 'rem') 3)
+	#echo 'id_width  ='${id_width}
+	#echo 'host_width='${host_width}
+	#echo 'port_width='${port_width}
+	#echo 'user_width='${user_width}
+	#echo 'passwd_or_key_file_width='${passwd_or_key_file_width}
+	#echo 'rem_width ='${rem_width}
+	#echo ''
+	local format="%-${id_width}s  %-${host_width}s  %-${port_width}s  %-${user_width}s  %-${passwd_or_key_file_width}s  %s\n"
+	
+	# 打印表头
+	printf "${format}" 'ID' 'HOST' 'PORT' 'USER' 'PASSWD/KEY-FILE' 'REM'
+	
+	# 打印分隔线
+	printf "${format}" "$(generate_separator ${id_width})" "$(generate_separator ${host_width})" "$(generate_separator ${port_width})" "$(generate_separator ${user_width})" "$(generate_separator ${passwd_or_key_file_width})" "$(generate_separator ${rem_width})"
+	
+	# 使用 for 循环遍历 server_count 变量
+	for (( i=1; i<=${server_count}; i++ )); do
+		get_server "${i}"
+		#print_array "${server[@]}"
+		local host="${server[0]}"
+		local port="${server[1]}"
+		local user="${server[2]}"
+		local passwd="${server[3]}"
+		local key_file="${server[4]}"
+		local rem="${server[5]}"
+		printf "${format}" "${i}" "${host}" "${port}" "${user}" '******' "${rem}"
+	done
 }
 
+#_ls
+#exit 0
+
+
 # 获取服务器信息命令帮助
-function get_help_func(){
-	printf '  %s\t%s\n' 'get' 'get server'
+_get_help() {
+	printf '  %s\t%s\n' 'get' 'Get Server'
 	printf '  \t%s\n' 'Usage: get {id}'
 }
 
 # 获取服务器信息
-function get_func(){
-	if [[ $# -eq 0 ]]; then
-		get_help_func
+_get() {
+	# 参数
+	local args=("$@")
+	local length=${#args[@]}
+	
+	# 如果参数个数等于 0 时
+	if [[ length -eq 0 ]]; then
+		_get_help
 		return
 	fi
 	
-	if [[ $# -ne 1 ]]; then
+	# 如果参数个数不等于 1 时
+	if [[ length -ne 1 ]]; then
 		printf 'invalid parameter\n'
 		return
 	fi
 	
-	local id=$1
-	read_server_conf_func "$id"
-	local result=$?
-	if [[ $result -eq 0 ]]; then
+	# id
+	# 获取数组的第一个元素
+	local id="${args[0]}"
+	
+	# 如果 id 不是正整数时
+	if ! [[ ${id} =~ ^[1-9][0-9]*$ ]]; then
 		printf 'invalid id\n'
 		return
 	fi
 	
-	local host=${server['host']}
-	local port=${server['port']}
-	local user=${server['user']}
-	local passwd=${server['passwd']}
-	local key_file=${server['key_file']}
-	local rem=${server['rem']}
+	get_server "${id}"
+	#print_array "${server[@]}"
+	local host="${server[0]}"
+	if [[ "${host}" == '' ]]; then
+		printf "%s: id not found\n" "${id}"
+		return
+	fi
+	
+	local port="${server[1]}"
+	local user="${server[2]}"
+	local passwd="${server[3]}"
+	local key_file="${server[4]}"
+	local rem="${server[5]}"
 	
 	printf 'Host\t: %s\n' "${host}"
 	printf 'Port\t: %s\n' "${port}"
@@ -210,37 +359,54 @@ function get_func(){
 	printf 'Rem\t: %s\n' "${rem}"
 }
 
+
 # ssh命令帮助
-function ssh_help_func(){
-	printf '  %s\n' 'ssh'
+_ssh_help() {
+	printf '  %s\t%s\n' 'ssh' 'Secure Shell'
 	printf '  \t%s\n' 'Usage: ssh {id}'
 }
 
 # ssh命令
-function ssh_func(){
-	if [[ $# -eq 0 ]]; then
-		ssh_help_func
+_ssh() {
+	# 参数
+	local args=("$@")
+	local length=${#args[@]}
+	
+	# 如果参数个数等于 0 时
+	if [[ length -eq 0 ]]; then
+		_ssh_help
 		return
 	fi
 	
-	if [[ $# -ne 1 ]]; then
+	# 如果参数个数不等于 1 时
+	if [[ length -ne 1 ]]; then
 		printf 'invalid parameter\n'
 		return
 	fi
 	
-	local id=$1
-	read_server_conf_func "$id"
-	local result=$?
-	if [[ $result -eq 0 ]]; then
+	# id
+	# 获取数组的第一个元素
+	local id="${args[0]}"
+	
+	# 如果 id 不是正整数时
+	if ! [[ ${id} =~ ^[1-9][0-9]*$ ]]; then
 		printf 'invalid id\n'
 		return
 	fi
 	
-	local host=${server['host']}
-	local port=${server['port']}
-	local user=${server['user']}
-	local passwd=${server['passwd']}
-	local key_file=${server['key_file']}
+	get_server "${id}"
+	#print_array "${server[@]}"
+	local host="${server[0]}"
+	if [[ "${host}" == '' ]]; then
+		printf "%s: id not found\n" "${id}"
+		return
+	fi
+	
+	local port="${server[1]}"
+	local user="${server[2]}"
+	local passwd="${server[3]}"
+	local key_file="${server[4]}"
+	local rem="${server[5]}"
 
 	# 使用expect自动登录远程服务器
 	expect -c "
@@ -265,38 +431,55 @@ function ssh_func(){
 	"
 }
 
+
 # sftp命令帮助
-function sftp_help_func(){
-	printf '  %s\n' 'sftp'
+_sftp_help() {
+	printf '  %s\t%s\n' 'sftp' 'SSH File Transfer Protocol'
 	printf '  \t%s\n' 'Usage: sftp {id}'
 }
 
 # sftp命令
-function sftp_func(){
-	if [[ $# -eq 0 ]]; then
-		sftp_help_func
+_sftp() {
+	# 参数
+	local args=("$@")
+	local length=${#args[@]}
+	
+	# 如果参数个数等于 0 时
+	if [[ length -eq 0 ]]; then
+		_sftp_help
 		return
 	fi
 	
-	if [[ $# -ne 1 ]]; then
+	# 如果参数个数不等于 1 时
+	if [[ length -ne 1 ]]; then
 		printf 'invalid parameter\n'
 		return
 	fi
 	
-	local id=$1
-	read_server_conf_func "$id"
-	local result=$?
-	if [[ $result -eq 0 ]]; then
+	# id
+	# 获取数组的第一个元素
+	local id="${args[0]}"
+	
+	# 如果 id 不是正整数时
+	if ! [[ ${id} =~ ^[1-9][0-9]*$ ]]; then
 		printf 'invalid id\n'
 		return
 	fi
 	
-	local host=${server['host']}
-	local port=${server['port']}
-	local user=${server['user']}
-	local passwd=${server['passwd']}
-	local key_file=${server['key_file']}
-
+	get_server "${id}"
+	#print_array "${server[@]}"
+	local host="${server[0]}"
+	if [[ "${host}" == '' ]]; then
+		printf "%s: id not found\n" "${id}"
+		return
+	fi
+	
+	local port="${server[1]}"
+	local user="${server[2]}"
+	local passwd="${server[3]}"
+	local key_file="${server[4]}"
+	local rem="${server[5]}"
+	
 	expect -c "
 	set timeout 60
 	spawn sftp -P ${port} ${user}@${host}
@@ -308,43 +491,60 @@ function sftp_func(){
 	"
 }
 
+
 # scp命令帮助
-function scp_help_func(){
-	printf '  %s\n' 'scp'
+_scp_help() {
+	printf '  %s\t%s\n' 'scp' 'Secure Copy Protocol'
 	printf '  \t%s\n' 'Usage: '
 	printf '  \t%s\n' 'scp {id} put {local file} {remote file}'
 	printf '  \t%s\n' 'scp {id} get {remote file} {local file}'
 }
 
 # scp命令
-function scp_func(){
-	if [[ $# -eq 0 ]]; then
-		scp_help_func
+_scp() {
+	# 参数
+	local args=("$@")
+	local length=${#args[@]}
+	
+	# 如果参数个数等于 0 时
+	if [[ length -eq 0 ]]; then
+		_scp_help
 		return
 	fi
 	
-	if [[ $# -ne 4 ]]; then
+	# 如果参数个数不等于 4 时
+	if [[ length -ne 4 ]]; then
 		printf 'invalid parameter\n'
 		return
 	fi
 	
-	local id=$1
-	read_server_conf_func "$id"
-	local result=$?
-	if [[ $result -eq 0 ]]; then
+	# id
+	local id="${args[0]}"
+	
+	# 如果 id 不是正整数时
+	if ! [[ ${id} =~ ^[1-9][0-9]*$ ]]; then
 		printf 'invalid id\n'
 		return
 	fi
 	
-	local host=${server['host']}
-	local port=${server['port']}
-	local user=${server['user']}
-	local passwd=${server['passwd']}
-	local key_file=${server['key_file']}
+	get_server "${id}"
+	#print_array "${server[@]}"
+	local host="${server[0]}"
+	if [[ "${host}" == '' ]]; then
+		printf "%s: id not found\n" "${id}"
+		return
+	fi
 	
-	if [[ "$2" == 'put' ]]; then
-		local local_file=$3
-		local remote_file=$4
+	local port="${server[1]}"
+	local user="${server[2]}"
+	local passwd="${server[3]}"
+	local key_file="${server[4]}"
+	local rem="${server[5]}"
+	
+	local type="${args[1]}"
+	if [[ "${type}" == 'put' ]]; then
+		local local_file="${args[2]}"
+		local remote_file="${args[3]}"
 		expect -c "
 		set timeout 60
 		
@@ -367,9 +567,9 @@ function scp_func(){
 		interact
 		"
 		
-	elif [[ "$2" == 'get' ]]; then
-		local remote_file=$3
-		local local_file=$4
+	elif [[ "${type}" == 'get' ]]; then
+		local remote_file="${args[2]}"
+		local local_file="${args[3]}"
 		expect -c "
 		set timeout 60
 		
@@ -388,43 +588,60 @@ function scp_func(){
 	fi
 }
 
+
 # rsync命令帮助
-function rsync_help_func(){
-	printf '  %s\t\n' 'rsync'
+_rsync_help() {
+	printf '  %s\t%s\n' 'rsync' 'Remote Sync'
 	printf '  \t%s\n' 'Usage: '
 	printf '  \t%s\n' 'rsync {id} put {local file} {remote file}'
 	printf '  \t%s\n' 'rsync {id} get {remote file} {local file}'
 }
 
 # rsync命令
-function rsync_func(){
-	if [[ $# -eq 0 ]]; then
-		rsync_help_func
+_rsync() {
+	# 参数
+	local args=("$@")
+	local length=${#args[@]}
+	
+	# 如果参数个数等于 0 时
+	if [[ length -eq 0 ]]; then
+		_rsync_help
 		return
 	fi
 	
-	if [[ $# -ne 4 ]]; then
+	# 如果参数个数不等于 4 时
+	if [[ length -ne 4 ]]; then
 		printf 'invalid parameter\n'
 		return
 	fi
 	
-	local id=$1
-	read_server_conf_func "$id"
-	local result=$?
-	if [[ $result -eq 0 ]]; then
+	# id
+	local id="${args[0]}"
+	
+	# 如果 id 不是正整数时
+	if ! [[ ${id} =~ ^[1-9][0-9]*$ ]]; then
 		printf 'invalid id\n'
 		return
 	fi
 	
-	local host=${server['host']}
-	local port=${server['port']}
-	local user=${server['user']}
-	local passwd=${server['passwd']}
-	local key_file=${server['key_file']}
+	get_server "${id}"
+	#print_array "${server[@]}"
+	local host="${server[0]}"
+	if [[ "${host}" == '' ]]; then
+		printf "%s: id not found\n" "${id}"
+		return
+	fi
 	
-	if [[ "$2" == 'put' ]]; then
-		local local_file=$3
-		local remote_file=$4
+	local port="${server[1]}"
+	local user="${server[2]}"
+	local passwd="${server[3]}"
+	local key_file="${server[4]}"
+	local rem="${server[5]}"
+	
+	local type="${args[1]}"
+	if [[ "${type}" == 'put' ]]; then
+		local local_file="${args[2]}"
+		local remote_file="${args[3]}"
 		expect -c "
 		set timeout 60
 		
@@ -463,9 +680,9 @@ function rsync_func(){
 		interact
 		"
 		
-	elif [[ "$2" == 'get' ]]; then
-		local remote_file=$3
-		local local_file=$4
+	elif [[ "${type}" == 'get' ]]; then
+		local remote_file="${args[2]}"
+		local local_file="${args[3]}"
 		expect -c "
 		set timeout 60
 
@@ -484,118 +701,103 @@ function rsync_func(){
 	fi
 }
 
+
 # quit命令帮助
-function quit_help_func(){
-	printf '  %s\t%s\n' 'quit' 'quit'
+_quit_help() {
+	printf '  %s\t%s\n' 'quit' 'Quit'
 	printf '  \t%s\n' 'Usage: quit'
 }
 
+
 # 命令帮助
-function help_func(){
-	ls_help_func
-	get_help_func
-	ssh_help_func
-	sftp_help_func
-	scp_help_func
-	rsync_help_func
-	quit_help_func
+_help() {
+	_ls_help
+	_get_help
+	_ssh_help
+	_sftp_help
+	_scp_help
+	_rsync_help
+	_quit_help
 }
 
-echo ''
-ls_func
 
-while true; do
-	printf '\n'
-	# -p prompt（提示字符串）
-	read -p 'xshell$ ' cmd parameters_str
-	if [[ "$cmd" == '' ]]; then
-		continue
-	fi
+main() {
+	# 服务器列表
+	_ls
 	
-	#echo cmd $cmd
-	#echo parameters_str $parameters_str
-
-	parameters=()
-	index=0
-	
+	# 读取用户
 	while true; do
-		# 去除字符串前后空格
-		parameters_str="${parameters_str#"${parameters_str%%[![:space:]]*}"}"
-		parameters_str="${parameters_str%"${parameters_str##*[![:space:]]}"}"
+		printf '\n'
 		
-		# ${parameters_str%%pattern*}: 删除从 parameters_str 开头开始匹配的最长的 pattern*
-		# [[:space:]]: 匹配任何一个空白字符
-		# 例如，如果str的值为"This is a sample string"，那么${parameters_str%%[[:space:]]*}将返回"This"，即删除了第一个空格及其后的所有字符
+		# read 命令用于从标准输入（通常是键盘）读取用户输入
+		# '-p "prompt"'：指定一个提示符（prompt），即在等待用户输入时显示给用户的信息
+		# '-r'：表示 “raw”，作用是 read 命令在读取输入时不要对反斜杠字符进行特殊处理。当使用了 -r 选项后，read 命令会保持输入内容中反斜杠字符 \ 的原样性。通常情况下，如果没有使用 -r 选项，read 命令会将输入中的反斜杠 \ 进行转义处理，这意味着 \n 会被解释为换行符而不是两个字符 \ 和 n
+		# '-e'：启用行编辑功能，允许用户在输入过程中使用光标移动（左右箭头键）、删除（Backspace键）和插入（在任意位置插入文本）等操作
+		# '-a array'：将输入的参数分割存储到数组 array 中
+		#read -p 'xshell$ ' -r -e -a array
+		read -p 'xshell$ ' -r -e input
 		
-		parameters_substr=
+		# 使用 eval 将输入解析成数组
+		eval "array=(${input})"
 		
-		# 判断字符串是否以 双引号 开头
-		if [[ "$parameters_str" == '"'* ]]; then
-			parameters_str=${parameters_str:1}
-			parameters_substr=${parameters_str%%\"[[:space:]]*}
-			if [[ "$parameters_str" == "$parameters_substr" ]]; then
-				parameters_substr=${parameters_str%%\"*}
-				parameters_str=
-			else
-				len=${#parameters_substr}
-				let len=len+2
-				parameters_str=${parameters_str:${len}}
-			fi
+		# 数组长度
+		local length=${#array[@]}
+		#echo "length=${length}"
 		
-		# 空格分隔
-		else
-			parameters_substr=${parameters_str%%[[:space:]]*}
-			len=${#parameters_substr}
-			let len=len+1
-			parameters_str=${parameters_str:${len}}
+		# 如果数组长度为 0 时
+		if [[ length -eq 0 ]]; then
+			continue
 		fi
-		if [[ $parameters_substr == '' ]]; then
+		
+		# 命令
+		# 获取数组的第一个元素
+		local cmd="${array[0]}"
+		#echo "cmd=${cmd}"
+		
+		# 参数
+		# 截取数组，从索引 1 到结尾的元素
+		local args=("${array[@]:1}")
+		#print_array "${args[@]}"
+		
+		# ls
+		if [[ "$cmd" == 'ls' ]]; then
+			_ls
+		
+		# get
+		elif [[ "$cmd" == 'get' ]]; then
+			_get "${args[@]}"
+		
+		# ssh
+		elif [[ "$cmd" == 'ssh' ]]; then
+			_ssh "${args[@]}"
+		
+		# sftp
+		elif [[ "$cmd" == 'sftp' ]]; then
+			_sftp "${args[@]}"
+		
+		# scp
+		elif [[ "$cmd" == 'scp' ]]; then
+			_scp "${args[@]}"
+		
+		# rsync
+		elif [[ "$cmd" == 'rsync' ]]; then
+			_rsync "${args[@]}"
+		
+		# quit
+		elif [[ "$cmd" == 'quit' ]]; then
 			break
-		fi
 		
-		#echo $index $parameters_substr '('$parameters_str')'
-		parameters[$index]=$parameters_substr
-		let index++
+		# help
+		elif [[ "$cmd" == 'help' ]]; then
+			_help
+		
+		# command not found
+		else
+			printf "%s: command not found\n" "${cmd}"
+		fi
 	done
-	
-	#echo parameters ${#parameters[@]} ${parameters[@]}
-	
-	# ls
-	if [[ "$cmd" == 'ls' ]]; then
-		ls_func
-	
-	# get
-	elif [[ "$cmd" == 'get' ]]; then
-		get_func "${parameters[@]}"
-	
-	# ssh
-	elif [[ "$cmd" == 'ssh' ]]; then
-		ssh_func "${parameters[@]}"
-	
-	# sftp
-	elif [[ "$cmd" == 'sftp' ]]; then
-		sftp_func "${parameters[@]}"
-	
-	# scp
-	elif [[ "$cmd" == 'scp' ]]; then
-		scp_func "${parameters[@]}"
-	
-	# rsync
-	elif [[ "$cmd" == 'rsync' ]]; then
-		rsync_func "${parameters[@]}"
-	
-	# quit
-	elif [[ "$cmd" == 'quit' ]]; then
-		break
-	
-	# help
-	elif [[ "$cmd" == 'help' ]]; then
-		help_func
-	
-	# command not found
-	else
-		printf "%s: command not found\n" "${cmd}"
-	fi
-done
+}
+
+main
 
 exit 0
