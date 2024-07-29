@@ -17,28 +17,28 @@ EOF
 
 
 # 获取 xshell.sh 文件的真实路径
-xshell_file=$(realpath $(ls -al $0 | awk '{print $NF}'))
+global_xshell_file=$(realpath $(ls -al $0 | awk '{print $NF}'))
 # 判断 xshell.sh 是否是软链接文件
 if [[ -h "$0" ]]; then
-	xshell_ln_file=$(realpath -s $0)
-	echo 'XShell  File: '${xshell_ln_file}' -> '${xshell_file}
+	global_xshell_ln_file=$(realpath -s $0)
+	echo 'XShell  File: '${global_xshell_ln_file}' -> '${global_xshell_file}
 else
-	echo 'XShell  File: '${xshell_file}
+	echo 'XShell  File: '${global_xshell_file}
 fi
 
 # 获取 xshell.sh 文件所在的目录
-xshell_dir=${xshell_file%/*}
+global_xshell_dir=${global_xshell_file%/*}
 
 # 服务器配置文件
-server_file="${xshell_dir}/server.yaml"
-echo "Server  File: ${server_file}"
+global_server_file="${global_xshell_dir}/server.yaml"
+echo "Server  File: ${global_server_file}"
 
 # 命令历史记录文件
-history_file="${xshell_dir}/history"
-echo "History File: ${history_file}"
+global_history_file="${global_xshell_dir}/history"
+echo "History File: ${global_history_file}"
 
 # 命令历史记录临时文件
-tmp_history_file="${xshell_dir}/tmp_history"
+global_tmp_history_file="${global_xshell_dir}/tmp_history"
 
 echo ''
 
@@ -47,34 +47,34 @@ echo ''
 # 'declare'：声明变量
 # '-A'：指定是一个关联数组
 # 注：Bash 4.0+ 才支持关联数组。查看 Bash 版本：$ bash --version
-declare -A servers
+declare -A global_servers
 
 # 声明整数变量，用于存储服务器数量
-declare -i count=0
+declare -i global_count=0
 
 
 # 服务器信息
-declare host=''
-declare port=''
-declare user=''
-declare passwd=''
-declare key_file=''
-declare rem=''
+declare global_host=''
+declare global_port=''
+declare global_user=''
+declare global_passwd=''
+declare global_key_file=''
+declare global_rem=''
 
 
 # 服务器信息字段宽度
-declare -i id_width=2
-declare -i host_width=4
-declare -i port_width=4 
-declare -i user_width=4
-declare -i passwd_or_key_file_width=15
-declare -i rem_width=3
+declare -i global_id_width=2
+declare -i global_host_width=4
+declare -i global_port_width=4 
+declare -i global_user_width=4
+declare -i global_passwd_or_key_file_width=15
+declare -i global_rem_width=3
 
 
 # 读取服务器配置文件
 read_server_file() {
 	# 清空关联数组
-	servers=()
+	global_servers=()
 	
 	# 使用文件描述符读取服务器配置文件内容
 	# 使用文件描述符可以避免重复打开和关闭文件，尤其是在循环读取文件内容时，可以显著提高效率。
@@ -82,7 +82,7 @@ read_server_file() {
 
 	# 打开文件描述符
 	# 将文件关联到文件描述符 3 上，使得 read 命令可以从文件描述符 3 中读取数据，而不是直接从文件中读取。
-	exec 3< "${server_file}"
+	exec 3< "${global_server_file}"
 	
 	local id=0
 
@@ -94,7 +94,7 @@ read_server_file() {
 		# ':0:1'：表示截取变量值从索引等于 0 开始，长度为 1
 		if [[ "${line:0:1}" == "-" ]]; then
 			let id++
-			let count++
+			let global_count++
 			
 			# ':1'：表示截取变量值从索引等于 1 开始，其后的子串
 			# 将开头的 '-' 替换为 ' '（空格）
@@ -119,7 +119,7 @@ read_server_file() {
 			host="${host#"${host%%[![:space:]]*}"}"
 			host="${host%"${host##*[![:space:]]}"}"
 			
-			servers["${id},host"]="${host}"
+			global_servers["${id},host"]="${host}"
 			
 			local length=${#host}
 			if [[ ${length} -gt ${host_width} ]]; then
@@ -135,7 +135,7 @@ read_server_file() {
 			local port="${line:${length}}"
 			port="${port#"${port%%[![:space:]]*}"}"
 			port="${port%"${port##*[![:space:]]}"}"
-			servers["${id},port"]="${port}"
+			global_servers["${id},port"]="${port}"
 			
 			local length=${#port}
 			if [[ ${length} -gt ${port_width} ]]; then
@@ -151,7 +151,7 @@ read_server_file() {
 			local user="${line:${length}}"
 			user="${user#"${user%%[![:space:]]*}"}"
 			user="${user%"${user##*[![:space:]]}"}"
-			servers["${id},user"]="${user}"
+			global_servers["${id},user"]="${user}"
 			
 			local length=${#user}
 			if [[ ${length} -gt ${user_width} ]]; then
@@ -167,7 +167,7 @@ read_server_file() {
 			local passwd="${line:${length}}"
 			passwd="${passwd#"${passwd%%[![:space:]]*}"}"
 			passwd="${passwd%"${passwd##*[![:space:]]}"}"
-			servers["${id},passwd"]="${passwd}"
+			global_servers["${id},passwd"]="${passwd}"
 			continue
 		fi
 		
@@ -177,7 +177,7 @@ read_server_file() {
 			local key_file="${line:${length}}"
 			key_file="${key_file#"${key_file%%[![:space:]]*}"}"
 			key_file="${key_file%"${key_file##*[![:space:]]}"}"
-			servers["${id},key-file"]="${key_file}"
+			global_servers["${id},key-file"]="${key_file}"
 			continue
 		fi
 		
@@ -187,7 +187,7 @@ read_server_file() {
 			local rem="${line:${length}}"
 			rem="${rem#"${rem%%[![:space:]]*}"}"
 			rem="${rem%"${rem##*[![:space:]]}"}"
-			servers["${id},rem"]="${rem}"
+			global_servers["${id},rem"]="${rem}"
 			
 			local length=${#rem}
 			if [[ ${length} -gt ${rem_width} ]]; then
@@ -207,17 +207,17 @@ read_server_file() {
 get_server() {
 	local id=$1
 	
-	host=${servers["${id},host"]}
-	if [[ "${host}" == '' ]]; then
+	global_host=${global_servers["${id},host"]}
+	if [[ "${global_host}" == '' ]]; then
 		# 服务器信息不存在
 		return 1
 	fi
 	
-	port=${servers["${id},port"]}
-	user=${servers["${id},user"]}
-	passwd=${servers["${id},passwd"]}
-	key_file=${servers["${id},key-file"]}
-	rem=${servers["${id},rem"]}
+	global_port=${global_servers["${id},port"]}
+	global_user=${global_servers["${id},user"]}
+	global_passwd=${global_servers["${id},passwd"]}
+	global_key_file=${global_servers["${id},key-file"]}
+	global_rem=${global_servers["${id},rem"]}
 	
 	return 0
 }
@@ -253,18 +253,18 @@ _ls() {
 	fi
 	
 	# 格式化
-	local format="%-${id_width}s  %-${host_width}s  %-${port_width}s  %-${user_width}s  %-${passwd_or_key_file_width}s  %s\n"
+	local format="%-${global_id_width}s  %-${global_host_width}s  %-${global_port_width}s  %-${global_user_width}s  %-${global_passwd_or_key_file_width}s  %s\n"
 	
 	# 打印表头
 	printf "${format}" 'ID' 'HOST' 'PORT' 'USER' 'PASSWD/KEY-FILE' 'REM'
 	
 	# 打印分隔线
-	printf "${format}" "$(generate_separator ${id_width})" "$(generate_separator ${host_width})" "$(generate_separator ${port_width})" "$(generate_separator ${user_width})" "$(generate_separator ${passwd_or_key_file_width})" "$(generate_separator ${rem_width})"
+	printf "${format}" "$(generate_separator ${global_id_width})" "$(generate_separator ${global_host_width})" "$(generate_separator ${global_port_width})" "$(generate_separator ${global_user_width})" "$(generate_separator ${global_passwd_or_key_file_width})" "$(generate_separator ${global_rem_width})"
 	
-	# 使用 for 循环遍历 count 变量
-	for (( id=1; id<=${count}; id++ )); do
+	# 使用 for 循环遍历 global_count 变量
+	for (( id=1; id<=${global_count}; id++ )); do
 		if get_server "${id}"; then
-			printf "${format}" "${id}" "${host}" "${port}" "${user}" '******' "${rem}"
+			printf "${format}" "${id}" "${global_host}" "${global_port}" "${global_user}" '******' "${global_rem}"
 		fi
 	done
 }
@@ -309,12 +309,12 @@ _get() {
 		return
 	fi
 	
-	printf 'Host\t: %s\n' "${host}"
-	printf 'Port\t: %s\n' "${port}"
-	printf 'User\t: %s\n' "${user}"
-	printf 'Passwd\t: %s\n' "${passwd}"
-	printf 'Key File: %s\n' "${key_file}"
-	printf 'Rem\t: %s\n' "${rem}"
+	printf 'Host\t: %s\n' "${global_host}"
+	printf 'Port\t: %s\n' "${global_port}"
+	printf 'User\t: %s\n' "${global_user}"
+	printf 'Passwd\t: %s\n' "${global_passwd}"
+	printf 'Key File: %s\n' "${global_key_file}"
+	printf 'Rem\t: %s\n' "${global_rem}"
 }
 
 
@@ -364,14 +364,14 @@ _ssh() {
 	set timeout 60
 	
 	# spawn：启动一个新的进程，并将其与当前进程进行交互
-	spawn ssh ${user}@${host} -p ${port}
+	spawn ssh ${global_user}@${global_host} -p ${global_port}
 	
 	# expect：等待特定的字符串或正则表达式出现，并执行相应的操作
 	expect {
 		# send：向进程发送字符串，并将该参数发送到进程，这个过程类似模拟人类交互
 		# exp_continue：允许expect继续向下执行指令，在expect中多次匹配就需要用到
 		\"*yes/no*\" { send \"yes\r\"; exp_continue }
-		\"*assword:*\" { send \"${passwd}\r\" }
+		\"*assword:*\" { send \"${global_passwd}\r\" }
 	}
 	
 	# interact：允许用户与进程进行交互，interact命令可以在适当的时候进行任务的干预，
@@ -422,10 +422,10 @@ _sftp() {
 	
 	expect -c "
 	set timeout 60
-	spawn sftp -P ${port} ${user}@${host}
+	spawn sftp -P ${global_port} ${global_user}@${global_host}
 	expect {
 		\"*yes/no*\" { send \"yes\r\"; exp_continue }
-		\"*assword:*\" { send \"${passwd}\n\" }
+		\"*assword:*\" { send \"${global_passwd}\n\" }
 	}
 	interact
 	"
@@ -489,11 +489,11 @@ _scp() {
 		# -P 指定远程主机的 sshd 端口号
 		
 		# 从本地复制文件到远程主机
-		spawn scp -v -r -p -C -P ${port} ${local_file} ${user}@${host}:${remote_file}
+		spawn scp -v -r -p -C -P ${global_port} ${local_file} ${global_user}@${global_host}:${remote_file}
 		
 		expect {
 			\"*yes/no*\" { send \"yes\r\"; exp_continue }
-			\"*assword:*\" { send \"${passwd}\n\" }
+			\"*assword:*\" { send \"${global_passwd}\n\" }
 		}
 		interact
 		"
@@ -505,11 +505,11 @@ _scp() {
 		set timeout 60
 		
 		# 从远程主机复制文件到本地
-		spawn scp -v -r -p -C -P ${port} ${user}@${host}:${remote_file} ${local_file}
+		spawn scp -v -r -p -C -P ${global_port} ${global_user}@${global_host}:${remote_file} ${local_file}
 		
 		expect {
 			\"*yes/no*\" { send \"yes\r\"; exp_continue }
-			\"*assword:*\" { send \"${passwd}\n\" }
+			\"*assword:*\" { send \"${global_passwd}\n\" }
 		}
 		interact
 		"
@@ -591,13 +591,13 @@ _rsync() {
 		# --rsh=COMMAND, -e specify the remote shell to use
 		
 		# 从本地复制文件到远程主机
-		#spawn rsync -avz --delete --progress ${local_file} ${user}@${host}:${remote_file}
+		#spawn rsync -avz --delete --progress ${local_file} ${global_user}@${global_host}:${remote_file}
 		# https://www.linuxquestions.org/questions/linux-software-2/rsync-ssh-on-different-port-448112/
-		spawn rsync -avz --delete --progress -e \"ssh -p ${port}\" ${local_file} ${user}@${host}:${remote_file}
+		spawn rsync -avz --delete --progress -e \"ssh -p ${global_port}\" ${local_file} ${global_user}@${global_host}:${remote_file}
 		
 		expect {
 			\"*yes/no*\" { send \"yes\r\"; exp_continue }
-			\"*assword:*\" { send \"${passwd}\n\" }
+			\"*assword:*\" { send \"${global_passwd}\n\" }
 		}
 		interact
 		"
@@ -609,11 +609,11 @@ _rsync() {
 		set timeout 60
 
 		# 从远程主机复制文件到本地
-		spawn rsync -avz --delete --progress -e \"ssh -p ${port}\" ${user}@${host}:${remote_file} ${local_file} 
+		spawn rsync -avz --delete --progress -e \"ssh -p ${global_port}\" ${global_user}@${global_host}:${remote_file} ${local_file} 
 
 		expect {
 			\"*yes/no*\" { send \"yes\r\"; exp_continue }
-			\"*assword:*\" { send \"${passwd}\n\" }
+			\"*assword:*\" { send \"${global_passwd}\n\" }
 		}
 		interact
 		"
@@ -642,7 +642,7 @@ _history() {
 		return
 	fi
 	
-	cat -n "${history_file}"
+	cat -n "${global_history_file}"
 }
 
 
@@ -765,7 +765,7 @@ _exec() {
 		# 获取指定行号的内容
 		# '-n'：参数表示静默模式
 		# "${number}p"：表示打印第 number 行的内容
-		input=$(sed -n "${number}p" "${history_file}")
+		input=$(sed -n "${number}p" "${global_history_file}")
 			
 		# 如果参数 input 等于空字符串
 		if [[ "${input}" == '' ]]; then
@@ -781,10 +781,10 @@ _exec() {
 	
 	
 	# 记录命令到命令历史记录文件
-	echo "${input}" >> "${history_file}"
+	echo "${input}" >> "${global_history_file}"
 	
 	# 检查文件行数
-	local count=$(wc -l < "${history_file}")
+	local count=$(wc -l < "${global_history_file}")
 	
 	# 记录命令到命令历史记录文件的最大行数
 	local max_count=500
@@ -792,9 +792,9 @@ _exec() {
 	# 如果行数超过 max_count，则使用 tail 命令截取最后 max_count 行，并重写文件
 	if [[ ${count} -gt ${max_count} ]]; then
 		# 截取最后 max_count 行到临时文件
-		tail -n ${max_count} "${history_file}" > "${tmp_history_file}"
+		tail -n ${max_count} "${global_history_file}" > "${global_tmp_history_file}"
 		# 将临时文件覆盖原文件
-		mv "${tmp_history_file}" "${history_file}"
+		mv "${global_tmp_history_file}" "${global_history_file}"
 	fi
 	
 	
