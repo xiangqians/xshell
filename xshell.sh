@@ -101,9 +101,9 @@ read_server_file() {
 			line=" ${line:1}"
 			
 			local id_str="${id}"
-			local length=${#id_str}
-			if [[ ${length} -gt ${global_id_width} ]]; then
-				global_id_width=${length}
+			local id_width=${#id_str}
+			if [[ ${id_width} -gt ${global_id_width} ]]; then
+				global_id_width=${id_width}
 			fi
 		fi
 		
@@ -121,9 +121,9 @@ read_server_file() {
 			
 			global_servers["${id},host"]="${host}"
 			
-			local length=${#host}
-			if [[ ${length} -gt ${global_host_width} ]]; then
-				global_host_width=${length}
+			local host_width=${#host}
+			if [[ ${host_width} -gt ${global_host_width} ]]; then
+				global_host_width=${host_width}
 			fi
 			
 			continue
@@ -137,9 +137,9 @@ read_server_file() {
 			port="${port%"${port##*[![:space:]]}"}"
 			global_servers["${id},port"]="${port}"
 			
-			local length=${#port}
-			if [[ ${length} -gt ${global_port_width} ]]; then
-				global_port_width=${length}
+			local port_width=${#port}
+			if [[ ${port_width} -gt ${global_port_width} ]]; then
+				global_port_width=${port_width}
 			fi
 			
 			continue
@@ -153,9 +153,9 @@ read_server_file() {
 			user="${user%"${user##*[![:space:]]}"}"
 			global_servers["${id},user"]="${user}"
 			
-			local length=${#user}
-			if [[ ${length} -gt ${global_user_width} ]]; then
-				global_user_width=${length}
+			local user_width=${#user}
+			if [[ ${user_width} -gt ${global_user_width} ]]; then
+				global_user_width=${user_width}
 			fi
 			
 			continue
@@ -189,9 +189,33 @@ read_server_file() {
 			rem="${rem%"${rem##*[![:space:]]}"}"
 			global_servers["${id},rem"]="${rem}"
 			
-			local length=${#rem}
-			if [[ ${length} -gt ${global_rem_width} ]]; then
-				global_rem_width=${length}
+			length=${#rem}
+			local rem_width=0
+			for (( i=0; i<${length}; i++ )); do
+				local char="${rem:${i}:1}"
+				# '^[A-Za-z0-9]+$'：匹配由数字和26个英文字母组成的字符串，'^' 表示匹配字符串的开始位置，'[A-Za-z0-9]' 是一个字符集，表示匹配任何一个英文字母（大小写不限）或数字，'+' 表示匹配前面的字符集（即  '[A-Za-z0-9]'）一次或多次，'$' 表示匹配字符串的结束位置
+				if [[ "${char}" =~ [A-Za-z0-9] 
+					|| "${char}" == '~' || "${char}" == '`'
+					|| "${char}" == '!' || "${char}" == '@' || "${char}" == '#' || "${char}" == '$' || "${char}" == '%' || "${char}" == '^' || "${char}" == '&' || "${char}" == '*' || "${char}" == '(' || "${char}" == ')'
+					|| "${char}" == '_' || "${char}" == '-' || "${char}" == '+' || "${char}" == '='
+					|| "${char}" == '[' || "${char}" == ']'
+					|| "${char}" == '{' || "${char}" == '}'
+					|| "${char}" == ':' || "${char}" == ';'
+					|| "${char}" == '"' || "${char}" == "'"
+					|| "${char}" == '|' || "${char}" == '\'
+					|| "${char}" == '<' || "${char}" == '>'
+					|| "${char}" == ',' || "${char}" == '.' || "${char}" == '?' || "${char}" == '/'
+					# 特殊的中文符号
+					|| "${char}" == '—' || "${char}" == '…' || "${char}" == '’'
+				]]; then
+					let rem_width+=1
+				else
+					let rem_width+=2
+					#echo "'""${char}""'"
+				fi
+			done
+			if [[ ${rem_width} -gt ${global_rem_width} ]]; then
+				global_rem_width=${rem_width}
 			fi
 			
 			continue
