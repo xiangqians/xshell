@@ -35,8 +35,9 @@ XShell  File: /usr/local/bin/xshell.sh -> /usr/local/src/xshell/xshell.sh
 Server  File: /usr/local/src/xshell/server.yaml
 History File: /usr/local/src/xshell/history
 
-ID    HOST                 PORT       USER                 PASSWD/KEY-FILE  REM
-1     127.0.0.1            22         root                 ******           example
+ID  HOST       PORT  USER  PASSWD/KEY-FILE  REM
+--  ---------  ----  ----  ---------------  -------
+1   127.0.0.1  22    root  ******           example
 
 xshell$ help
   ls      Server List
