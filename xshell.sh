@@ -102,8 +102,8 @@ read_server_file() {
 			
 			local id_str="${id}"
 			local length=${#id_str}
-			if [[ ${length} -gt ${id_width} ]]; then
-				id_width=${length}
+			if [[ ${length} -gt ${global_id_width} ]]; then
+				global_id_width=${length}
 			fi
 		fi
 		
@@ -122,8 +122,8 @@ read_server_file() {
 			global_servers["${id},host"]="${host}"
 			
 			local length=${#host}
-			if [[ ${length} -gt ${host_width} ]]; then
-				host_width=${length}
+			if [[ ${length} -gt ${global_host_width} ]]; then
+				global_host_width=${length}
 			fi
 			
 			continue
@@ -138,8 +138,8 @@ read_server_file() {
 			global_servers["${id},port"]="${port}"
 			
 			local length=${#port}
-			if [[ ${length} -gt ${port_width} ]]; then
-				port_width=${length}
+			if [[ ${length} -gt ${global_port_width} ]]; then
+				global_port_width=${length}
 			fi
 			
 			continue
@@ -154,8 +154,8 @@ read_server_file() {
 			global_servers["${id},user"]="${user}"
 			
 			local length=${#user}
-			if [[ ${length} -gt ${user_width} ]]; then
-				user_width=${length}
+			if [[ ${length} -gt ${global_user_width} ]]; then
+				global_user_width=${length}
 			fi
 			
 			continue
@@ -190,8 +190,8 @@ read_server_file() {
 			global_servers["${id},rem"]="${rem}"
 			
 			local length=${#rem}
-			if [[ ${length} -gt ${rem_width} ]]; then
-				rem_width=${length}
+			if [[ ${length} -gt ${global_rem_width} ]]; then
+				global_rem_width=${length}
 			fi
 			
 			continue
