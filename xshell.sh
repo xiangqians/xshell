@@ -12,35 +12,38 @@ cat << EOF
 EOF
 
 
-# 双引号会先解析变量的内容
-# 单引号包裹的内容表示原样输出
+# 单引号：保留所有字符的原始含义，不进行变量替换或者转义字符解析。
+# 双引号：允许变量替换和大部分转义字符的解析，除了一些特殊的字符如 $、\、` 等。
 
 
 # 获取 xshell.sh 文件的真实路径
 xshell_file=$(realpath $(ls -al $0 | awk '{print $NF}'))
 # 判断 xshell.sh 是否是软链接文件
 if [[ -h "$0" ]]; then
-	local xshell_ln_file=$(realpath -s $0)
-	echo 'XShell File: '${xshell_ln_file}' -> '${xshell_file}
+	xshell_ln_file=$(realpath -s $0)
+	echo 'XShell  File: '${xshell_ln_file}' -> '${xshell_file}
 else
-	echo 'XShell File: '${xshell_file}
+	echo 'XShell  File: '${xshell_file}
 fi
-
 
 # 获取 xshell.sh 文件所在的目录
 xshell_dir=${xshell_file%/*}
 
-
 # 服务器配置文件
 server_file="${xshell_dir}/server.yaml"
-echo "Server File: ${server_file}"
+echo "Server  File: ${server_file}"
+
+# 命令历史记录文件
+history_file="${xshell_dir}/history"
+echo "History File: ${history_file}"
+
+# 命令历史记录临时文件
+tmp_history_file="${xshell_dir}/tmp_history"
+
 echo ''
 
 
-#exit 0
-
-
-# 声明关联数组，用来存储服务器配置信息
+# 声明关联数组，用来存储服务器信息
 # 'declare'：声明变量
 # '-A'：指定是一个关联数组
 # 注：Bash 4.0+ 才支持关联数组。查看 Bash 版本：$ bash --version
@@ -49,6 +52,8 @@ declare -A servers
 # 声明整数变量，用于存储服务器数量
 declare -i count=0
 
+
+# 服务器信息
 declare host=''
 declare port=''
 declare user=''
@@ -56,6 +61,8 @@ declare passwd=''
 declare key_file=''
 declare rem=''
 
+
+# 服务器信息字段宽度
 declare -i id_width=2
 declare -i host_width=4
 declare -i port_width=4 
@@ -63,7 +70,12 @@ declare -i user_width=4
 declare -i passwd_or_key_file_width=15
 declare -i rem_width=3
 
-init() {
+
+# 读取服务器配置文件
+read_server_file() {
+	# 清空关联数组
+	servers=()
+	
 	# 使用文件描述符读取服务器配置文件内容
 	# 使用文件描述符可以避免重复打开和关闭文件，尤其是在循环读取文件内容时，可以显著提高效率。
 	# 文件描述符一旦打开，可以在整个脚本或程序执行期间保持打开状态，直到显式关闭为止。
@@ -75,11 +87,17 @@ init() {
 	local id=0
 
 	# 逐行读取文件内容
+	# 'IFS='：IFS 是 Bash 的一个特殊变量，用于控制字段分隔符（Internal Field Separator）。在这里，'IFS=' 表示将字段分隔符设置为空，这样可以确保在读取行时不会因为空格或制表符而分割行内容，而是将整行作为一个完整的字符串。
+	# '-r'：表示 “raw”，作用是 read 命令在读取输入时不要对反斜杠字符进行特殊处理。当使用了 -r 选项后，read 命令会保持输入内容中反斜杠字符 \ 的原样性。通常情况下，如果没有使用 -r 选项，read 命令会将输入中的反斜杠 \ 进行转义处理，这意味着 \n 会被解释为换行符而不是两个字符 \ 和 n
+	# '-u 3'：表示从文件描述符 3 中读取输入。文件描述符是用来标识文件或其他输入输出源的整数值。
 	while IFS= read -r -u 3 line; do
-		# ':0:1'：表示截取变量值从索引等于0开始，截取长度为 1
+		# ':0:1'：表示截取变量值从索引等于 0 开始，长度为 1
 		if [[ "${line:0:1}" == "-" ]]; then
 			let id++
+			let count++
 			
+			# ':1'：表示截取变量值从索引等于 1 开始，其后的子串
+			# 将开头的 '-' 替换为 ' '（空格）
 			line=" ${line:1}"
 			
 			local id_str="${id}"
@@ -180,14 +198,11 @@ init() {
 		fi
 	done
 	
-	count=id
-	
 	# 关闭文件描述符
 	# 关闭文件描述符 3，释放与文件的关联。
 	exec 3<&-
 }
 
-init
 
 get_server() {
 	local id=$1
@@ -210,12 +225,9 @@ get_server() {
 
 # 服务器列表命令帮助
 _ls_help() {
-	printf '  %s\t%s\n' 'ls' 'Server List'
-	printf '  \t%s\n' 'Usage: ls'
+	printf '  %s\t  %s\n' 'ls' 'Server List'
+	printf '  \t  %s\n' 'Usage: ls'
 }
-
-#_ls_help
-#exit 0
 
 # 生成分隔线
 generate_separator() {
@@ -228,16 +240,18 @@ generate_separator() {
     echo "${separator}"
 }
 
-test_generate_separator() {
-	local separator=$(generate_separator 2)
-	echo "separator=${separator}"
-	exit 0
-}
-
-#test_generate_separator
-
 # 服务器列表
 _ls() {
+	# 参数
+	local args=("$@")
+	local length=${#args[@]}
+	
+	# 如果参数个数不等于 0 时
+	if [[ length -ne 0 ]]; then
+		printf 'invalid parameter\n'
+		return
+	fi
+	
 	# 格式化
 	local format="%-${id_width}s  %-${host_width}s  %-${port_width}s  %-${user_width}s  %-${passwd_or_key_file_width}s  %s\n"
 	
@@ -247,7 +261,7 @@ _ls() {
 	# 打印分隔线
 	printf "${format}" "$(generate_separator ${id_width})" "$(generate_separator ${host_width})" "$(generate_separator ${port_width})" "$(generate_separator ${user_width})" "$(generate_separator ${passwd_or_key_file_width})" "$(generate_separator ${rem_width})"
 	
-	# 使用 for 循环遍历 server_count 变量
+	# 使用 for 循环遍历 count 变量
 	for (( id=1; id<=${count}; id++ )); do
 		if get_server "${id}"; then
 			printf "${format}" "${id}" "${host}" "${port}" "${user}" '******' "${rem}"
@@ -255,14 +269,11 @@ _ls() {
 	done
 }
 
-#_ls
-#exit 0
-
 
 # 获取服务器信息命令帮助
 _get_help() {
-	printf '  %s\t%s\n' 'get' 'Get Server'
-	printf '  \t%s\n' 'Usage: get {id}'
+	printf '  %s\t  %s\n' 'get' 'Get Server'
+	printf '  \t  %s\n' 'Usage: get {id}'
 }
 
 # 获取服务器信息
@@ -309,8 +320,8 @@ _get() {
 
 # ssh命令帮助
 _ssh_help() {
-	printf '  %s\t%s\n' 'ssh' 'Secure Shell'
-	printf '  \t%s\n' 'Usage: ssh {id}'
+	printf '  %s\t  %s\n' 'ssh' 'Secure Shell'
+	printf '  \t  %s\n' 'Usage: ssh {id}'
 }
 
 # ssh命令
@@ -372,8 +383,8 @@ _ssh() {
 
 # sftp命令帮助
 _sftp_help() {
-	printf '  %s\t%s\n' 'sftp' 'SSH File Transfer Protocol'
-	printf '  \t%s\n' 'Usage: sftp {id}'
+	printf '  %s\t  %s\n' 'sftp' 'SSH File Transfer Protocol'
+	printf '  \t  %s\n' 'Usage: sftp {id}'
 }
 
 # sftp命令
@@ -423,10 +434,10 @@ _sftp() {
 
 # scp命令帮助
 _scp_help() {
-	printf '  %s\t%s\n' 'scp' 'Secure Copy Protocol'
-	printf '  \t%s\n' 'Usage: '
-	printf '  \t%s\n' 'scp {id} put {local file} {remote file}'
-	printf '  \t%s\n' 'scp {id} get {remote file} {local file}'
+	printf '  %s\t  %s\n' 'scp' 'Secure Copy Protocol'
+	printf '  \t  %s\n' 'Usage: '
+	printf '  \t  %s\n' 'scp {id} put {local file} {remote file}'
+	printf '  \t  %s\n' 'scp {id} get {remote file} {local file}'
 }
 
 # scp命令
@@ -511,10 +522,10 @@ _scp() {
 
 # rsync命令帮助
 _rsync_help() {
-	printf '  %s\t%s\n' 'rsync' 'Remote Sync'
-	printf '  \t%s\n' 'Usage: '
-	printf '  \t%s\n' 'rsync {id} put {local file} {remote file}'
-	printf '  \t%s\n' 'rsync {id} get {remote file} {local file}'
+	printf '  %s\t  %s\n' 'rsync' 'Remote Sync'
+	printf '  \t  %s\n' 'Usage: '
+	printf '  \t  %s\n' 'rsync {id} put {local file} {remote file}'
+	printf '  \t  %s\n' 'rsync {id} get {remote file} {local file}'
 }
 
 # rsync命令
@@ -613,26 +624,247 @@ _rsync() {
 }
 
 
+# 历史记录命令帮助
+_history_help() {
+	printf '  %s %s\n' 'history' 'History'
+	printf '  \t  %s\n' 'Usage: history'
+}
+
+# 历史记录命令
+_history() {
+	# 参数
+	local args=("$@")
+	local length=${#args[@]}
+	
+	# 如果参数个数不等于 0 时
+	if [[ length -ne 0 ]]; then
+		printf 'invalid parameter\n'
+		return
+	fi
+	
+	cat -n "${history_file}"
+}
+
+
+# clear命令帮助
+_clear_help() {
+	printf '  %s\t  %s\n' 'clear' 'Clear'
+	printf '  \t  %s\n' 'Usage: clear'
+}
+
+# clear命令
+_clear() {
+	# 命令参数数组
+	local args=("$@")
+	local length=${#args[@]}
+	
+	# 如果参数个数不等于 0 时
+	if [[ length -ne 0 ]]; then
+		printf 'invalid parameter\n'
+		return
+	fi
+	
+	# clear 命令用于清空当前终端屏幕内容
+	clear
+}
+
+
 # quit命令帮助
 _quit_help() {
-	printf '  %s\t%s\n' 'quit' 'Quit'
-	printf '  \t%s\n' 'Usage: quit'
+	printf '  %s\t  %s\n' 'quit' 'Quit'
+	printf '  \t  %s\n' 'Usage: quit'
+}
+
+# quit命令
+_quit() {
+	# 命令参数数组
+	local args=("$@")
+	local length=${#args[@]}
+	
+	# 如果参数个数不等于 0 时
+	if [[ length -ne 0 ]]; then
+		printf 'invalid parameter\n'
+		return
+	fi
+	
+	exit 0
 }
 
 
 # 命令帮助
 _help() {
+	# 参数
+	local args=("$@")
+	local length=${#args[@]}
+	
+	# 如果参数个数不等于 0 时
+	if [[ length -ne 0 ]]; then
+		printf 'invalid parameter\n'
+		return
+	fi
+
 	_ls_help
 	_get_help
 	_ssh_help
 	_sftp_help
 	_scp_help
 	_rsync_help
+	_history_help
+	_clear_help
 	_quit_help
 }
 
 
+# 执行命令
+_exec() {
+	# 获取参数
+	local input="$1"
+	#echo "input=${input}"
+	
+	
+	# 使用 eval 将输入解析成数组
+	eval "array=(${input})"
+	# 如果 eval 返回状态码非 0，说明执行出现错误
+	if [ $? -ne 0 ]; then
+		return
+	fi
+	
+	# 命令
+	# 获取数组的第一个元素
+	local cmd="${array[0]}"
+	#echo "cmd=${cmd}"
+	
+	# 命令参数数组
+	# 截取数组，从索引 1 到结尾的元素
+	local args=("${array[@]:1}")
+	#echo "args=${args[@]}"
+		
+	# 命令参数数组长度
+	local length=${#args[@]}
+	#echo "length=${length}"
+	
+	
+	# 执行命令历史记录指定编号的命令
+	# ':0:1'：表示截取变量值从索引等于 0 开始，长度为 1
+	if [[ "${cmd:0:1}" == '!' ]]; then
+		# 如果参数长度不等于 0 时
+		if [[ length -ne 0 ]]; then
+			printf 'invalid parameter\n'
+			return
+		fi
+		
+		# ':1'：表示截取变量值从索引等于 1 开始，其后的子串
+		local number="${cmd:1}"
+		
+		# 如果参数 number 等于空字符串
+		if [[ number == '' ]]; then
+			printf 'invalid parameter\n'
+			return
+		fi
+			
+		# 获取指定行号的内容
+		# '-n'：参数表示静默模式
+		# "${number}p"：表示打印第 number 行的内容
+		input=$(sed -n "${number}p" "${history_file}")
+			
+		# 如果参数 input 等于空字符串
+		if [[ "${input}" == '' ]]; then
+			printf 'invalid number\n'
+			return
+		fi
+		
+		echo "${input}"
+		_exec "${input}"
+		
+		return	
+	fi
+	
+	
+	# 记录命令到命令历史记录文件
+	echo "${input}" >> "${history_file}"
+	
+	# 检查文件行数
+	local count=$(wc -l < "${history_file}")
+	
+	# 记录命令到命令历史记录文件的最大行数
+	local max_count=500
+	
+	# 如果行数超过 max_count，则使用 tail 命令截取最后 max_count 行，并重写文件
+	if [[ ${count} -gt ${max_count} ]]; then
+		# 截取最后 max_count 行到临时文件
+		tail -n ${max_count} "${history_file}" > "${tmp_history_file}"
+		# 将临时文件覆盖原文件
+		mv "${tmp_history_file}" "${history_file}"
+	fi
+	
+	
+	# ls
+	if [[ "${cmd}" == 'ls' ]]; then
+		_ls "${args[@]}"
+		return
+	fi
+	
+	# get
+	if [[ "${cmd}" == 'get' ]]; then
+		_get "${args[@]}"
+		return
+	fi
+	
+	# ssh
+	if [[ "${cmd}" == 'ssh' ]]; then
+		_ssh "${args[@]}"
+		return
+	fi
+	
+	# sftp
+	if [[ "${cmd}" == 'sftp' ]]; then
+		_sftp "${args[@]}"
+		return
+	fi
+	
+	# scp
+	if [[ "${cmd}" == 'scp' ]]; then
+		_scp "${args[@]}"
+		return
+	fi
+	
+	# rsync
+	if [[ "${cmd}" == 'rsync' ]]; then
+		_rsync "${args[@]}"
+	
+	# history
+	elif [[ "${cmd}" == 'history' ]]; then
+		_history "${args[@]}"
+		return
+	fi
+	
+	# clear
+	if [[ "${cmd}" == 'clear' ]]; then
+		_clear "${args[@]}"
+		return
+	fi
+	
+	# quit
+	if [[ "${cmd}" == 'quit' ]]; then	
+		_quit "${args[@]}"
+		return
+	fi
+	
+	# help
+	if [[ "${cmd}" == 'help' ]]; then
+		_help "${args[@]}"
+		return
+	fi
+	
+	# command not found
+	printf "%s: command not found\n" "${cmd}"
+	return
+}
+
 main() {
+	# 读取服务器配置文件
+	read_server_file
+
 	# 服务器列表
 	_ls
 	
@@ -647,68 +879,15 @@ main() {
 		# '-a array'：将输入的参数分割存储到数组 array 中
 		#read -p 'xshell$ ' -r -e -a array
 		read -p 'xshell$ ' -r -e input
-		
-		# 使用 eval 将输入解析成数组
-		eval "array=(${input})"
-		
-		# 数组长度
-		local length=${#array[@]}
-		#echo "length=${length}"
-		
-		# 如果数组长度为 0 时
-		if [[ length -eq 0 ]]; then
+	
+		# 如果输入为空字符时
+		if [[ "${input}" == '' ]]; then
 			continue
 		fi
 		
-		# 命令
-		# 获取数组的第一个元素
-		local cmd="${array[0]}"
-		#echo "cmd=${cmd}"
-		
-		# 参数
-		# 截取数组，从索引 1 到结尾的元素
-		local args=("${array[@]:1}")
-		#print_array "${args[@]}"
-		
-		# ls
-		if [[ "$cmd" == 'ls' ]]; then
-			_ls
-		
-		# get
-		elif [[ "$cmd" == 'get' ]]; then
-			_get "${args[@]}"
-		
-		# ssh
-		elif [[ "$cmd" == 'ssh' ]]; then
-			_ssh "${args[@]}"
-		
-		# sftp
-		elif [[ "$cmd" == 'sftp' ]]; then
-			_sftp "${args[@]}"
-		
-		# scp
-		elif [[ "$cmd" == 'scp' ]]; then
-			_scp "${args[@]}"
-		
-		# rsync
-		elif [[ "$cmd" == 'rsync' ]]; then
-			_rsync "${args[@]}"
-		
-		# quit
-		elif [[ "$cmd" == 'quit' ]]; then
-			break
-		
-		# help
-		elif [[ "$cmd" == 'help' ]]; then
-			_help
-		
-		# command not found
-		else
-			printf "%s: command not found\n" "${cmd}"
-		fi
+		# 执行
+		_exec "${input}"
 	done
 }
 
 main
-
-exit 0
