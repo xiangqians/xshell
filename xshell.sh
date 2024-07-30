@@ -855,9 +855,11 @@ _exec() {
 	# rsync
 	if [[ "${cmd}" == 'rsync' ]]; then
 		_rsync "${args[@]}"
+		return
+	fi
 	
 	# history
-	elif [[ "${cmd}" == 'history' ]]; then
+	if [[ "${cmd}" == 'history' ]]; then
 		_history "${args[@]}"
 		return
 	fi
